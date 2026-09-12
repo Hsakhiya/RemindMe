@@ -297,10 +297,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <Ionicons name="information-circle-outline" size={18} color={theme.primaryLight} />
                   <Text style={[styles.aboutLabel, { color: theme.text }]}>App Version</Text>
                 </View>
-                <View style={[styles.badgeContainer, { backgroundColor: `${theme.primary}20` }]}>
-                  <Text style={[styles.badgeText, { color: theme.primaryLight }]}>
-                    v{appVersion}
-                  </Text>
+                <View style={styles.versionBadgeGroup}>
+                  <View style={[styles.badgeContainer, { backgroundColor: `${theme.primary}20` }]}>
+                    <Text style={[styles.badgeText, { color: theme.primaryLight }]}>
+                      v{appVersion}
+                    </Text>
+                  </View>
+                  {Updates.isEnabled && (
+                    <View
+                      style={[
+                        styles.badgeContainer,
+                        {
+                          backgroundColor: Updates.isEmbeddedLaunch
+                            ? `${theme.surfaceBorder}`
+                            : '#10B98120',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.badgeText,
+                          {
+                            fontSize: 11,
+                            color: Updates.isEmbeddedLaunch ? theme.textMuted : '#10B981',
+                          },
+                        ]}
+                      >
+                        {Updates.isEmbeddedLaunch ? 'Base APK' : 'OTA Live'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -552,6 +578,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
+  },
+  versionBadgeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   badgeText: {
     fontSize: 13,
