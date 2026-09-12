@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   View,
@@ -7,9 +7,12 @@ import {
   StyleSheet,
   ScrollView,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 import { useTheme } from '../context/ThemeContext';
 import {
   THEME_PRESETS,
@@ -33,8 +36,57 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
   const buildNumber = Constants.expoConfig?.android?.versionCode ?? 1;
 
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateStatusText, setUpdateStatusText] = useState<string | null>(null);
+
   const handleTestAlert = async () => {
     await sendTestNotificationNow();
+  };
+
+  const handleCheckUpdates = async () => {
+    if (!Updates.isEnabled) {
+      Alert.alert(
+        'Development Mode',
+        'Over-The-Air (OTA) updates are active in installed APK builds. Updates are disabled when running in Expo Go or local dev server.'
+      );
+      return;
+    }
+
+    try {
+      setCheckingUpdate(true);
+      setUpdateStatusText('Checking for updates...');
+      const check = await Updates.checkForUpdateAsync();
+      if (check.isAvailable) {
+        setUpdateStatusText('Downloading update...');
+        await Updates.fetchUpdateAsync();
+        setUpdateStatusText('Update ready to apply');
+        Alert.alert(
+          'Update Downloaded',
+          'A new version has been downloaded over the air. Restart the app now to apply the changes?',
+          [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'Restart Now',
+              style: 'default',
+              onPress: async () => {
+                await Updates.reloadAsync();
+              },
+            },
+          ]
+        );
+      } else {
+        setUpdateStatusText('App is up to date');
+        Alert.alert('Up to Date', 'You are running the latest version of RemindMe.');
+      }
+    } catch (error: any) {
+      setUpdateStatusText('Check failed');
+      Alert.alert(
+        'Update Check',
+        error?.message || 'Unable to check for updates right now. Please verify your internet connection.'
+      );
+    } finally {
+      setCheckingUpdate(false);
+    }
   };
 
   return (
@@ -268,6 +320,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               <View style={styles.aboutRow}>
                 <View style={styles.aboutLabelGroup}>
+                  <Ionicons name="cloud-download-outline" size={18} color={theme.primaryLight} />
+                  <Text style={[styles.aboutLabel, { color: theme.text }]}>OTA Channel</Text>
+                </View>
+                <Text style={[styles.aboutValue, { color: theme.textMuted }]}>
+                  {Updates.channel || (Updates.isEnabled ? 'preview' : 'Disabled in Dev')}
+                </Text>
+              </View>
+
+              <View style={[styles.aboutDivider, { backgroundColor: theme.surfaceBorder }]} />
+
+              <View style={styles.aboutRow}>
+                <View style={styles.aboutLabelGroup}>
                   <Ionicons name="shield-checkmark-outline" size={18} color="#10B981" />
                   <Text style={[styles.aboutLabel, { color: theme.text }]}>Privacy & Storage</Text>
                 </View>
@@ -276,6 +340,47 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </Text>
               </View>
             </View>
+
+            {/* Check for Updates CTA */}
+            <TouchableOpacity
+              style={[
+                styles.updateCheckCard,
+                {
+                  backgroundColor: theme.background,
+                  borderColor: theme.surfaceBorder,
+                },
+              ]}
+              onPress={handleCheckUpdates}
+              disabled={checkingUpdate}
+              activeOpacity={0.8}
+            >
+              <View style={styles.updateCheckLeft}>
+                <Ionicons
+                  name={checkingUpdate ? 'sync' : 'refresh-circle-outline'}
+                  size={24}
+                  color={theme.primaryLight}
+                />
+                <View style={styles.updateCheckTextContainer}>
+                  <Text style={[styles.updateCheckTitle, { color: theme.text }]}>
+                    Check for Updates (OTA)
+                  </Text>
+                  <Text
+                    style={[styles.updateCheckSubtitle, { color: theme.textMuted }]}
+                    numberOfLines={1}
+                  >
+                    {updateStatusText ||
+                      (Updates.isEnabled
+                        ? 'Download latest features without reinstalling APK'
+                        : 'Over-The-Air updates active in APK builds')}
+                  </Text>
+                </View>
+              </View>
+              {checkingUpdate ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+              )}
+            </TouchableOpacity>
 
             {/* App Info Footer */}
             <View style={styles.infoFooter}>
@@ -451,6 +556,33 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  updateCheckCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 12,
+  },
+  updateCheckLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  updateCheckTextContainer: {
+    flex: 1,
+  },
+  updateCheckTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  updateCheckSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
   },
   infoFooter: {
     alignItems: 'center',
