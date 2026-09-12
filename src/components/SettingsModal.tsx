@@ -124,32 +124,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             contentContainerStyle={styles.scrollContent}
           >
             {/* Section: Accent Color */}
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
-              ACCENT COLOR THEME
-            </Text>
-            <View style={styles.accentGrid}>
+            <View style={styles.colorHeaderRow}>
+              <Text style={[styles.sectionTitle, { color: theme.textSecondary, marginBottom: 0 }]}>
+                ACCENT COLOR
+              </Text>
+              <View
+                style={[
+                  styles.activeColorBadge,
+                  {
+                    backgroundColor: `${THEME_PRESETS[themeKey]?.primary}18`,
+                    borderColor: `${THEME_PRESETS[themeKey]?.primary}40`,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.activeColorDot,
+                    { backgroundColor: THEME_PRESETS[themeKey]?.primary },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.activeColorText,
+                    { color: THEME_PRESETS[themeKey]?.primaryLight },
+                  ]}
+                >
+                  {THEME_PRESETS[themeKey]?.name}
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.colorSwatchesContainer}
+              style={styles.colorSwatchesScroll}
+            >
               {(Object.keys(THEME_PRESETS) as ThemeKey[]).map((key) => {
                 const preset = THEME_PRESETS[key];
                 const isSelected = themeKey === key;
                 return (
                   <TouchableOpacity
                     key={key}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.accentCard,
-                      {
-                        backgroundColor: theme.background,
-                        borderColor: isSelected
-                          ? preset.primary
-                          : theme.surfaceBorder,
-                      },
-                      isSelected && styles.accentCardSelected,
-                    ]}
+                    activeOpacity={0.7}
                     onPress={() => setThemeKey(key)}
+                    style={[
+                      styles.swatchTouchTarget,
+                      isSelected && {
+                        borderColor: preset.primary,
+                        backgroundColor: `${preset.primary}20`,
+                      },
+                    ]}
+                    accessibilityLabel={preset.name}
                   >
                     <View
                       style={[
-                        styles.colorCircle,
+                        styles.swatchCircle,
                         { backgroundColor: preset.primary },
                       ]}
                     >
@@ -157,27 +187,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <Ionicons name="checkmark" size={16} color="#FFFFFF" />
                       )}
                     </View>
-                    <Text
-                      style={[
-                        styles.accentName,
-                        {
-                          color: isSelected ? theme.text : theme.textMuted,
-                          fontWeight: isSelected ? '700' : '500',
-                        },
-                      ]}
-                    >
-                      {preset.name}
-                    </Text>
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
 
             {/* Section: Background Style */}
             <Text
               style={[
                 styles.sectionTitle,
-                { color: theme.textSecondary, marginTop: 20 },
+                { color: theme.textSecondary, marginTop: 16 },
               ]}
             >
               BACKGROUND STYLE
@@ -471,34 +490,60 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     marginBottom: 10,
   },
-  accentGrid: {
+  colorHeaderRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
   },
-  accentCard: {
-    width: '48%',
+  activeColorBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    gap: 10,
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
   },
-  accentCardSelected: {
-    borderWidth: 2,
+  activeColorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  colorCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+  activeColorText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  colorSwatchesScroll: {
+    marginBottom: 4,
+  },
+  colorSwatchesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 2,
+  },
+  swatchTouchTarget: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
-  accentName: {
-    fontSize: 13,
-    flex: 1,
+  swatchCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
   },
   bgRow: {
     flexDirection: 'row',
