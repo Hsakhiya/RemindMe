@@ -30,7 +30,7 @@ export type ThemeKey =
   | 'teal'
   | 'coral';
 
-export type BackgroundKey = 'slate' | 'amoled' | 'midnight';
+export type BackgroundKey = 'slate' | 'amoled' | 'midnight' | 'glass';
 
 export interface ThemePreset {
   id: ThemeKey;
@@ -135,6 +135,14 @@ export const BACKGROUND_PRESETS: Record<
     surface: '#162032',
     surfaceLight: '#23324C',
     surfaceBorder: '#2E4163',
+  },
+  glass: {
+    id: 'glass',
+    name: 'Liquid Glass',
+    background: '#070A13',
+    surface: 'rgba(24, 34, 54, 0.72)',
+    surfaceLight: 'rgba(40, 54, 82, 0.65)',
+    surfaceBorder: 'rgba(255, 255, 255, 0.18)',
   },
 };
 

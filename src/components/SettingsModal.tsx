@@ -193,15 +193,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </ScrollView>
 
             {/* Section: Background Style */}
-            <Text
-              style={[
-                styles.sectionTitle,
-                { color: theme.textSecondary, marginTop: 16 },
-              ]}
-            >
-              BACKGROUND STYLE
-            </Text>
-            <View style={styles.bgRow}>
+            <View style={[styles.colorHeaderRow, { marginTop: 18 }]}>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  { color: theme.textSecondary, marginBottom: 0 },
+                ]}
+              >
+                BACKGROUND STYLE
+              </Text>
+              <View
+                style={[
+                  styles.activeColorBadge,
+                  {
+                    backgroundColor: `${theme.primary}18`,
+                    borderColor: `${theme.primary}40`,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.activeColorText,
+                    { color: theme.primaryLight },
+                  ]}
+                >
+                  {BACKGROUND_PRESETS[backgroundKey]?.name}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.bgGrid}>
               {(Object.keys(BACKGROUND_PRESETS) as BackgroundKey[]).map(
                 (bgId) => {
                   const bgPreset = BACKGROUND_PRESETS[bgId];
@@ -218,6 +239,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             ? theme.primary
                             : theme.surfaceBorder,
                         },
+                        isSelected && styles.bgCardSelected,
                       ]}
                       onPress={() => setBackgroundKey(bgId)}
                     >
@@ -225,13 +247,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <View
                           style={[
                             styles.bgDot,
-                            { backgroundColor: bgPreset.surface },
+                            {
+                              backgroundColor: bgPreset.surface,
+                              borderColor: bgPreset.surfaceBorder,
+                              borderWidth: 1,
+                            },
                           ]}
                         />
                         {isSelected && (
                           <Ionicons
                             name="checkmark-circle"
-                            size={18}
+                            size={16}
                             color={theme.primary}
                           />
                         )}
@@ -545,22 +571,27 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 2,
   },
-  bgRow: {
+  bgGrid: {
     flexDirection: 'row',
-    gap: 10,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
   },
   bgCard: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
+    width: '48.5%',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1.5,
+  },
+  bgCardSelected: {
+    borderWidth: 2,
   },
   bgCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   bgDot: {
     width: 14,
