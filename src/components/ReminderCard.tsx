@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,19 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { Reminder } from '../types/reminder';
 import { CATEGORY_CONFIG } from '../theme/theme';
 import { useTheme } from '../context/ThemeContext';
 import { getTimeStatus, formatTime, formatDate } from '../utils/dateUtils';
+import {
+  isWithinDisabledRange,
+  formatTimeRange,
+  formatTimeString12h,
+} from '../utils/intervalUtils';
 
 interface ReminderCardProps {
   reminder: Reminder;
@@ -33,7 +41,9 @@ export const ReminderCard: React.FC<ReminderCardProps> = ({
 }) => {
   const { theme } = useTheme();
   const categoryInfo = CATEGORY_CONFIG[reminder.category] || CATEGORY_CONFIG.General;
-  const timeStatus = getTimeStatus(reminder.scheduledTime, reminder.isCompleted);
+
+  const isInterval = reminder.repeatFrequency === 'interval';
+  const timeStatus = getTimeStatus(reminder.scheduledTime, reminder.isCompleted, isInterval);
 
   const isPaused =
     !!reminder.pausedUntil &&
@@ -41,6 +51,16 @@ export const ReminderCard: React.FC<ReminderCardProps> = ({
 
   const isExpired =
     !!reminder.stopAt && new Date(reminder.stopAt).getTime() <= Date.now();
+
+  const isInsideQuietHours =
+    isInterval &&
+    reminder.disabledTimeRange?.enabled &&
+    isWithinDisabledRange(new Date(), reminder.disabledTimeRange);
+
+  const [showCustomPausePicker, setShowCustomPausePicker] = useState<'date' | 'time' | null>(null);
+  const [tempPauseDate, setTempPauseDate] = useState<Date>(
+    new Date(Date.now() + 2 * 60 * 60 * 1000)
+  );
 
   const confirmDelete = () => {
     Alert.alert(
@@ -98,14 +118,35 @@ export const ReminderCard: React.FC<ReminderCardProps> = ({
             onPause && onPause(reminder.id, tomorrow.toISOString());
           },
         },
+        {
+          text: 'Pick Custom Time...',
+          onPress: () => setShowCustomPausePicker('date'),
+        },
         { text: 'Cancel', style: 'cancel' },
       ]
     );
   };
 
+  const handleCustomPauseChange = (event: DateTimePickerEvent, date?: Date) => {
+    if (event.type === 'set' && date) {
+      if (showCustomPausePicker === 'date') {
+        setTempPauseDate(date);
+        setShowCustomPausePicker('time');
+      } else if (showCustomPausePicker === 'time') {
+        setShowCustomPausePicker(null);
+        if (onPause) {
+          onPause(reminder.id, date.toISOString());
+        }
+      }
+    } else {
+      setShowCustomPausePicker(null);
+    }
+  };
+
   return (
-    <TouchableOpacity
-      activeOpacity={0.85}
+    <>
+      <TouchableOpacity
+        activeOpacity={0.85}
       onPress={() => onPress && onPress(reminder)}
       style={[
         styles.card,
@@ -214,6 +255,40 @@ export const ReminderCard: React.FC<ReminderCardProps> = ({
                 </Text>
               </View>
             )}
+
+            {/* Quiet Hours / Disabled Range Badge */}
+            {reminder.repeatFrequency === 'interval' &&
+              reminder.disabledTimeRange?.enabled && (
+                <View
+                  style={[
+                    styles.badge,
+                    {
+                      backgroundColor: isInsideQuietHours
+                        ? 'rgba(245, 158, 11, 0.15)'
+                        : 'rgba(168, 85, 247, 0.15)',
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={isInsideQuietHours ? 'moon' : 'moon-outline'}
+                    size={12}
+                    color={isInsideQuietHours ? '#F59E0B' : '#A855F7'}
+                  />
+                  <Text
+                    style={[
+                      styles.badgeText,
+                      {
+                        color: isInsideQuietHours ? '#F59E0B' : '#A855F7',
+                        fontWeight: '600',
+                      },
+                    ]}
+                  >
+                    {isInsideQuietHours
+                      ? `🌙 In Quiet Hours (Resumes ${formatTimeString12h(reminder.disabledTimeRange.endTime)})`
+                      : `🌙 Quiet: ${formatTimeRange(reminder.disabledTimeRange.startTime, reminder.disabledTimeRange.endTime)}`}
+                  </Text>
+                </View>
+              )}
 
             {/* Daily / Weekly Badge */}
             {(reminder.repeatFrequency === 'daily' ||
@@ -324,6 +399,17 @@ export const ReminderCard: React.FC<ReminderCardProps> = ({
         </View>
       </View>
     </TouchableOpacity>
+
+    {showCustomPausePicker && (
+      <DateTimePicker
+        value={tempPauseDate}
+        mode={showCustomPausePicker}
+        is24Hour={false}
+        display="default"
+        onChange={handleCustomPauseChange}
+      />
+    )}
+  </>
   );
 };
 

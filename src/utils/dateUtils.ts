@@ -44,7 +44,8 @@ export function formatFullDateTime(isoString: string): string {
 
 export function getTimeStatus(
   isoString: string,
-  isCompleted: boolean
+  isCompleted: boolean,
+  isInterval?: boolean
 ): { label: string; isOverdue: boolean; isToday: boolean } {
   if (isCompleted) {
     return { label: 'Completed', isOverdue: false, isToday: false };
@@ -60,6 +61,21 @@ export function getTimeStatus(
     date.getFullYear() === today.getFullYear() &&
     date.getMonth() === today.getMonth() &&
     date.getDate() === today.getDate();
+
+  // If this is an interval reminder, it repeats periodically and should NEVER show an overdue warning.
+  if (isInterval) {
+    if (diffMinutes <= 0) {
+      return { label: 'Next cycle due', isOverdue: false, isToday: true };
+    }
+    if (diffMinutes < 60) {
+      return { label: `Next in ${diffMinutes}m`, isOverdue: false, isToday: true };
+    }
+    const diffHours = Math.round(diffMinutes / 60);
+    if (diffHours < 24 && isToday) {
+      return { label: `Next in ${diffHours}h`, isOverdue: false, isToday: true };
+    }
+    return { label: `Next: ${formatTime(isoString)}`, isOverdue: false, isToday };
+  }
 
   if (diffMinutes < 0) {
     const overdueMinutes = Math.abs(diffMinutes);

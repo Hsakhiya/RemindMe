@@ -140,13 +140,21 @@ export async function scheduleReminderNotification(reminder: Reminder): Promise<
         channelId: REMINDER_CHANNEL_ID,
       };
     } else if (reminder.repeatFrequency === 'interval') {
-      const intervalSec = Math.max((reminder.intervalMinutes || 30) * 60, 60);
-      trigger = {
-        type: notif.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: intervalSec,
-        repeats: true,
-        channelId: REMINDER_CHANNEL_ID,
-      };
+      if (targetDate.getTime() > now.getTime()) {
+        trigger = {
+          type: notif.SchedulableTriggerInputTypes.DATE,
+          date: targetDate,
+          channelId: REMINDER_CHANNEL_ID,
+        };
+      } else {
+        const intervalSec = Math.max((reminder.intervalMinutes || 30) * 60, 60);
+        trigger = {
+          type: notif.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: intervalSec,
+          repeats: true,
+          channelId: REMINDER_CHANNEL_ID,
+        };
+      }
     } else if (reminder.repeatFrequency === 'daily') {
       trigger = {
         type: notif.SchedulableTriggerInputTypes.DAILY,

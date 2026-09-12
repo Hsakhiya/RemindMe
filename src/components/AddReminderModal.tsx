@@ -20,6 +20,11 @@ import { Reminder, CategoryType, RepeatFrequency } from '../types/reminder';
 import { CATEGORY_CONFIG } from '../theme/theme';
 import { useTheme } from '../context/ThemeContext';
 import { formatDate, formatTime } from '../utils/dateUtils';
+import {
+  formatTimeRange,
+  formatTimeString12h,
+  parseTimeString,
+} from '../utils/intervalUtils';
 
 interface AddReminderModalProps {
   visible: boolean;
@@ -74,6 +79,12 @@ export const AddReminderModal: React.FC<AddReminderModalProps> = ({
     new Date(Date.now() + 4 * 60 * 60 * 1000)
   );
 
+  // Disabled Time Range (Quiet Hours) state for intervals
+  const [hasDisabledRange, setHasDisabledRange] = useState<boolean>(false);
+  const [disabledStartTime, setDisabledStartTime] = useState<string>('22:00'); // default 10:00 PM
+  const [disabledEndTime, setDisabledEndTime] = useState<string>('08:00'); // default 08:00 AM
+  const [disabledPickerMode, setDisabledPickerMode] = useState<'start' | 'end' | null>(null);
+
   // Picker state for start Date/Time
   const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
 
@@ -95,6 +106,15 @@ export const AddReminderModal: React.FC<AddReminderModalProps> = ({
         setHasStopTime(false);
         setStopAtDate(new Date(Date.now() + 4 * 60 * 60 * 1000));
       }
+      if (initialReminder.disabledTimeRange?.enabled) {
+        setHasDisabledRange(true);
+        setDisabledStartTime(initialReminder.disabledTimeRange.startTime || '22:00');
+        setDisabledEndTime(initialReminder.disabledTimeRange.endTime || '08:00');
+      } else {
+        setHasDisabledRange(false);
+        setDisabledStartTime('22:00');
+        setDisabledEndTime('08:00');
+      }
     } else {
       const defaultTime = new Date(Date.now() + 60 * 60 * 1000);
       defaultTime.setMinutes(Math.ceil(defaultTime.getMinutes() / 5) * 5, 0, 0);
@@ -106,6 +126,9 @@ export const AddReminderModal: React.FC<AddReminderModalProps> = ({
       setIntervalMinutes(30);
       setHasStopTime(false);
       setStopAtDate(new Date(Date.now() + 4 * 60 * 60 * 1000));
+      setHasDisabledRange(false);
+      setDisabledStartTime('22:00');
+      setDisabledEndTime('08:00');
     }
   }, [initialReminder, visible]);
 
@@ -120,6 +143,21 @@ export const AddReminderModal: React.FC<AddReminderModalProps> = ({
     setStopPickerMode(null);
     if (event.type === 'set' && date) {
       setStopAtDate(date);
+    }
+  };
+
+  const handleDisabledTimeChange = (event: DateTimePickerEvent, date?: Date) => {
+    const mode = disabledPickerMode;
+    setDisabledPickerMode(null);
+    if (event.type === 'set' && date) {
+      const hours = date.getHours().toString().padStart(2, '0');
+      const mins = date.getMinutes().toString().padStart(2, '0');
+      const timeStr = `${hours}:${mins}`;
+      if (mode === 'start') {
+        setDisabledStartTime(timeStr);
+      } else if (mode === 'end') {
+        setDisabledEndTime(timeStr);
+      }
     }
   };
 
@@ -176,6 +214,14 @@ export const AddReminderModal: React.FC<AddReminderModalProps> = ({
       repeatFrequency,
       intervalMinutes: repeatFrequency === 'interval' ? intervalMinutes : undefined,
       stopAt: hasStopTime ? stopAtDate.toISOString() : undefined,
+      disabledTimeRange:
+        repeatFrequency === 'interval' && hasDisabledRange
+          ? {
+              enabled: true,
+              startTime: disabledStartTime,
+              endTime: disabledEndTime,
+            }
+          : undefined,
     });
 
     onClose();
@@ -462,6 +508,110 @@ export const AddReminderModal: React.FC<AddReminderModalProps> = ({
                     minutes
                   </Text>
                 </View>
+              </View>
+            )}
+
+            {/* Disabled Time Range (Quiet Hours) for Interval */}
+            {repeatFrequency === 'interval' && (
+              <View
+                style={[
+                  styles.stopTimeCard,
+                  {
+                    backgroundColor: theme.background,
+                    borderColor: theme.surfaceBorder,
+                  },
+                ]}
+              >
+                <View style={styles.stopTimeToggleRow}>
+                  <View style={styles.stopTimeLabelContainer}>
+                    <Ionicons name="moon-outline" size={18} color={theme.accent} />
+                    <View>
+                      <Text style={[styles.stopTimeTitle, { color: theme.text }]}>
+                        Quiet Hours / Disable Window
+                      </Text>
+                      <Text style={[styles.stopTimeSubtitle, { color: theme.textMuted }]}>
+                        Mute alerts during a daily window (e.g. sleep/night)
+                      </Text>
+                    </View>
+                  </View>
+                  <Switch
+                    value={hasDisabledRange}
+                    onValueChange={setHasDisabledRange}
+                    trackColor={{ false: theme.surfaceBorder, true: theme.primary }}
+                    thumbColor="#FFFFFF"
+                  />
+                </View>
+
+                {hasDisabledRange && (
+                  <View style={{ marginTop: 10 }}>
+                    <View style={styles.dateTimeRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.pickerTrigger,
+                          {
+                            backgroundColor: theme.surface,
+                            borderColor: theme.surfaceBorder,
+                          },
+                        ]}
+                        onPress={() => setDisabledPickerMode('start')}
+                      >
+                        <Ionicons name="time-outline" size={16} color={theme.accent} />
+                        <View>
+                          <Text style={[styles.rangeSubLabel, { color: theme.textMuted }]}>
+                            Mute From
+                          </Text>
+                          <Text style={[styles.pickerTriggerText, { color: theme.text }]}>
+                            {formatTimeString12h(disabledStartTime)}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.pickerTrigger,
+                          {
+                            backgroundColor: theme.surface,
+                            borderColor: theme.surfaceBorder,
+                          },
+                        ]}
+                        onPress={() => setDisabledPickerMode('end')}
+                      >
+                        <Ionicons name="time-outline" size={16} color={theme.accent} />
+                        <View>
+                          <Text style={[styles.rangeSubLabel, { color: theme.textMuted }]}>
+                            Resume At
+                          </Text>
+                          <Text style={[styles.pickerTriggerText, { color: theme.text }]}>
+                            {formatTimeString12h(disabledEndTime)}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={[styles.rangeInfoNote, { color: theme.textMuted }]}>
+                      🌙 Silenced from {formatTimeRange(disabledStartTime, disabledEndTime)}. Alerts automatically resume at {formatTimeString12h(disabledEndTime)}.
+                    </Text>
+                  </View>
+                )}
+
+                {disabledPickerMode && (
+                  <DateTimePicker
+                    value={(() => {
+                      const { hours, minutes } = parseTimeString(
+                        disabledPickerMode === 'start'
+                          ? disabledStartTime
+                          : disabledEndTime
+                      );
+                      const d = new Date();
+                      d.setHours(hours, minutes, 0, 0);
+                      return d;
+                    })()}
+                    mode="time"
+                    is24Hour={false}
+                    display="default"
+                    onChange={handleDisabledTimeChange}
+                  />
+                )}
               </View>
             )}
 
@@ -825,6 +975,16 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
+  },
+  rangeSubLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  rangeInfoNote: {
+    fontSize: 12,
+    marginTop: 8,
+    lineHeight: 16,
   },
   saveBtnText: {
     fontSize: 15,

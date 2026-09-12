@@ -9,6 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { useTheme } from '../context/ThemeContext';
 import {
   THEME_PRESETS,
@@ -28,6 +29,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
 }) => {
   const { theme, themeKey, backgroundKey, setThemeKey, setBackgroundKey } = useTheme();
+
+  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+  const buildNumber = Constants.expoConfig?.android?.versionCode ?? 1;
 
   const handleTestAlert = async () => {
     await sendTestNotificationNow();
@@ -218,10 +222,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
             </TouchableOpacity>
 
+            {/* Section: About & App Info */}
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: theme.textSecondary, marginTop: 20 },
+              ]}
+            >
+              ABOUT & SYSTEM INFO
+            </Text>
+            <View
+              style={[
+                styles.aboutCard,
+                {
+                  backgroundColor: theme.background,
+                  borderColor: theme.surfaceBorder,
+                },
+              ]}
+            >
+              <View style={styles.aboutRow}>
+                <View style={styles.aboutLabelGroup}>
+                  <Ionicons name="information-circle-outline" size={18} color={theme.primaryLight} />
+                  <Text style={[styles.aboutLabel, { color: theme.text }]}>App Version</Text>
+                </View>
+                <View style={[styles.badgeContainer, { backgroundColor: `${theme.primary}20` }]}>
+                  <Text style={[styles.badgeText, { color: theme.primaryLight }]}>
+                    v{appVersion}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.aboutDivider, { backgroundColor: theme.surfaceBorder }]} />
+
+              <View style={styles.aboutRow}>
+                <View style={styles.aboutLabelGroup}>
+                  <Ionicons name="git-commit-outline" size={18} color={theme.textMuted} />
+                  <Text style={[styles.aboutLabel, { color: theme.text }]}>Build Code</Text>
+                </View>
+                <Text style={[styles.aboutValue, { color: theme.textMuted }]}>
+                  #{buildNumber}
+                </Text>
+              </View>
+
+              <View style={[styles.aboutDivider, { backgroundColor: theme.surfaceBorder }]} />
+
+              <View style={styles.aboutRow}>
+                <View style={styles.aboutLabelGroup}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color="#10B981" />
+                  <Text style={[styles.aboutLabel, { color: theme.text }]}>Privacy & Storage</Text>
+                </View>
+                <Text style={[styles.aboutValue, { color: '#10B981' }]}>
+                  100% Offline
+                </Text>
+              </View>
+            </View>
+
             {/* App Info Footer */}
             <View style={styles.infoFooter}>
               <Text style={[styles.appVersion, { color: theme.textMuted }]}>
-                RemindMe v1.0.0 • Offline & Private
+                RemindMe • Built with React Native & Expo
               </Text>
             </View>
           </ScrollView>
@@ -356,9 +415,46 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
+  aboutCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  aboutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  aboutLabelGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  aboutLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  aboutValue: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  aboutDivider: {
+    height: StyleSheet.hairlineWidth,
+  },
+  badgeContainer: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  badgeText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   infoFooter: {
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 20,
     marginBottom: 8,
   },
   appVersion: {

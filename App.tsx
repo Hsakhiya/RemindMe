@@ -33,6 +33,10 @@ import {
   setupNotificationListeners,
   isExpoGo,
 } from './src/services/notificationService';
+import {
+  isWithinDisabledRange,
+  calculateNextIntervalTime,
+} from './src/utils/intervalUtils';
 import { Header } from './src/components/Header';
 import { FilterBar } from './src/components/FilterBar';
 import { ReminderCard } from './src/components/ReminderCard';
@@ -118,6 +122,16 @@ function ReminderMainScreen() {
           continue;
         }
 
+        // If interval reminder and currently within quiet/disabled hours, advance silently without vibrating
+        if (
+          r.repeatFrequency === 'interval' &&
+          r.disabledTimeRange?.enabled &&
+          isWithinDisabledRange(new Date(), r.disabledTimeRange)
+        ) {
+          await advanceInterval(r);
+          continue;
+        }
+
         const dueTime = new Date(r.scheduledTime).getTime();
         // Trigger if due within past 60 seconds and not already triggered in this cycle
         if (dueTime <= now && now - dueTime < 60000 && !triggeredRef.current.has(r.id)) {
@@ -170,11 +184,13 @@ function ReminderMainScreen() {
    * Advance an interval reminder to its next scheduled cycle
    */
   const advanceInterval = async (reminder: Reminder) => {
-    const nextDue = new Date(
-      Date.now() + (reminder.intervalMinutes || 30) * 60 * 1000
+    const nextDue = calculateNextIntervalTime(
+      reminder.scheduledTime,
+      reminder.intervalMinutes || 30,
+      reminder.disabledTimeRange
     );
 
-    // If stopAt is reached, stop repeating
+    // If stopAt cutoff is reached, stop repeating
     if (reminder.stopAt && nextDue.getTime() > new Date(reminder.stopAt).getTime()) {
       await toggleReminderStatus(reminder.id);
       fetchReminders();

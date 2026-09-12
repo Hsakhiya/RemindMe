@@ -4,13 +4,15 @@ import {
   scheduleReminderNotification,
   cancelReminderNotification,
 } from './notificationService';
+import { syncWidgetReminders } from './widgetSyncService';
+import { calculateNextIntervalTime } from '../utils/intervalUtils';
 
 const STORAGE_KEY = '@remindme_reminders_v1';
 
 /**
- * Load all reminders from persistent storage.
+ * Read raw reminders array from storage.
  */
-export async function loadReminders(): Promise<Reminder[]> {
+async function readRawReminders(): Promise<Reminder[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) {
@@ -25,15 +27,92 @@ export async function loadReminders(): Promise<Reminder[]> {
 }
 
 /**
+ * Automatically advances any active interval reminders whose scheduledTime is in the past.
+ * This ensures interval timers are strictly rolling forward to upcoming cycles and never stuck showing overdue.
+ */
+export async function syncAndAdvanceIntervalReminders(): Promise<Reminder[]> {
+  const currentList = await readRawReminders();
+  const now = Date.now();
+  let changed = false;
+
+  const updatedList: Reminder[] = [];
+
+  for (const reminder of currentList) {
+    if (
+      !reminder.isCompleted &&
+      reminder.repeatFrequency === 'interval' &&
+      new Date(reminder.scheduledTime).getTime() <= now
+    ) {
+      // Check if cutoff stopAt time has passed
+      if (reminder.stopAt && new Date(reminder.stopAt).getTime() <= now) {
+        reminder.isCompleted = true;
+        if (reminder.notificationId) {
+          await cancelReminderNotification(reminder.notificationId);
+          reminder.notificationId = undefined;
+        }
+        changed = true;
+      } else {
+        // Calculate the next upcoming future cycle (respecting quiet/disabled hours)
+        const nextTime = calculateNextIntervalTime(
+          reminder.scheduledTime,
+          reminder.intervalMinutes || 30,
+          reminder.disabledTimeRange
+        );
+
+        // If next time exceeds stopAt cutoff, mark completed
+        if (reminder.stopAt && nextTime.getTime() > new Date(reminder.stopAt).getTime()) {
+          reminder.isCompleted = true;
+          if (reminder.notificationId) {
+            await cancelReminderNotification(reminder.notificationId);
+            reminder.notificationId = undefined;
+          }
+        } else {
+          reminder.scheduledTime = nextTime.toISOString();
+          // Reschedule notification for the upcoming cycle
+          const notifId = await scheduleReminderNotification(reminder);
+          if (notifId) {
+            reminder.notificationId = notifId;
+          }
+        }
+        changed = true;
+      }
+    }
+    updatedList.push(reminder);
+  }
+
+  if (changed) {
+    await saveReminders(updatedList);
+  }
+
+  return updatedList;
+}
+
+/**
+ * Load all reminders from persistent storage and ensure interval reminders are rolled forward.
+ */
+export async function loadReminders(): Promise<Reminder[]> {
+  try {
+    return await syncAndAdvanceIntervalReminders();
+  } catch (error) {
+    console.error('Failed to sync and load reminders from storage:', error);
+    return await readRawReminders();
+  }
+}
+
+/**
  * Save array of reminders to persistent storage.
  */
 export async function saveReminders(reminders: Reminder[]): Promise<void> {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(reminders));
+    // Immediately synchronize the updated reminders with Android Home Screen Widget
+    syncWidgetReminders(reminders).catch(() => {});
   } catch (error) {
     console.error('Failed to save reminders to storage:', error);
   }
 }
+
+export { loadReminders as getReminders, toggleReminderStatus as toggleReminder };
 
 /**
  * Add a new reminder, schedule its notification, and persist it.

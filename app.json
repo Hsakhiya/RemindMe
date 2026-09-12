@@ -14,6 +14,7 @@
     },
     "android": {
       "package": "com.remindme.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#1E293B",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -41,6 +42,25 @@
           "icon": "./assets/icon.png",
           "color": "#6366F1",
           "defaultChannel": "reminders-channel"
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "RemindersWidget",
+              "label": "RemindMe Widget",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "description": "View upcoming reminders and active intervals on your home screen",
+              "previewImage": "./assets/icon.png",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
         }
       ]
     ],
