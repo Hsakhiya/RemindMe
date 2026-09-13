@@ -12,6 +12,7 @@ import {
   Vibration,
   BackHandler,
   Platform,
+  AppState,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
@@ -108,9 +109,19 @@ function ReminderMainScreen() {
       checkDueReminders();
     }, 10000);
 
+    // 6. Listen for app foregrounding to re-check full-screen permission when returning from settings
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && Platform.OS === 'android') {
+        AlarmNativeService.canUseFullScreenIntent().then((canUse) => {
+          setHasFullScreenPermission(canUse);
+        });
+      }
+    });
+
     return () => {
       unsubscribeListeners();
       clearInterval(timerInterval);
+      appStateSub.remove();
     };
   }, []);
 
@@ -444,7 +455,7 @@ function ReminderMainScreen() {
         </View>
       )}
 
-      {/* Lock screen permission warning banner on Android */}
+      {/* Lock screen permission warning banner on Android (especially Google Pixel & Android 14+) */}
       {!hasFullScreenPermission && Platform.OS === 'android' && (
         <TouchableOpacity
           style={styles.permissionBanner}
@@ -453,20 +464,20 @@ function ReminderMainScreen() {
             setTimeout(async () => {
               const allowed = await AlarmNativeService.canUseFullScreenIntent();
               setHasFullScreenPermission(allowed);
-            }, 1000);
+            }, 1500);
           }}
           activeOpacity={0.8}
         >
-          <Ionicons name="warning-outline" size={18} color="#F59E0B" />
+          <Ionicons name="warning-outline" size={20} color="#F59E0B" />
           <View style={styles.permissionBannerContent}>
             <Text style={styles.permissionBannerTitle}>
-              Lock Screen Alarms Permission Required
+              Pixel / Android 14 Full-Screen Permission
             </Text>
             <Text style={styles.permissionBannerSubtitle}>
-              Tap to allow "Full-screen intents" so alarms wake your phone when locked.
+              Tap here to toggle ON "Allow full-screen notifications" in Settings so alarms wake up your screen!
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color="#F59E0B" />
+          <Ionicons name="chevron-forward" size={18} color="#F59E0B" />
         </TouchableOpacity>
       )}
 

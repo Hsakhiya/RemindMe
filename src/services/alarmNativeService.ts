@@ -53,4 +53,23 @@ export const AlarmNativeService = {
       AlarmModule.openFullScreenIntentSettings();
     }
   },
+
+  /**
+   * Schedule an exact system alarm clock using AlarmManager.setAlarmClock.
+   * This directly launches AlarmActivity over the lock screen on Google Pixel and Android 14/15 devices.
+   */
+  scheduleAlarmClock(id: string, triggerAtMillis: number, title: string, body: string, data: string): void {
+    if (Platform.OS === 'android' && AlarmModule?.scheduleAlarmClock) {
+      AlarmModule.scheduleAlarmClock(id, triggerAtMillis, title, body, data);
+    }
+  },
+
+  /**
+   * Cancel an existing alarm clock scheduled via AlarmManager.
+   */
+  cancelAlarmClock(id: string): void {
+    if (Platform.OS === 'android' && AlarmModule?.cancelAlarmClock) {
+      AlarmModule.cancelAlarmClock(id);
+    }
+  },
 };

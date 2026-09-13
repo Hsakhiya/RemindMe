@@ -219,3 +219,107 @@ if (fs.existsSync(presentationFile)) {
     console.log('[Patch] ExpoPresentationDelegate.kt already up to date.');
   }
 }
+
+// 4. Patch ExpoSchedulingDelegate.kt to use AlarmManager.setAlarmClock for exact alarms
+const schedulingFile = path.join(
+  __dirname,
+  '..',
+  'node_modules',
+  'expo-notifications',
+  'android',
+  'src',
+  'main',
+  'java',
+  'expo',
+  'modules',
+  'notifications',
+  'service',
+  'delegates',
+  'ExpoSchedulingDelegate.kt'
+);
+
+if (fs.existsSync(schedulingFile)) {
+  let schedulingContent = fs.readFileSync(schedulingFile, 'utf8');
+
+  // Normalize if previously patched
+  if (schedulingContent.includes('setAlarmClock(info, operation)')) {
+    const prevPattern = /  private fun setupAlarm\(triggerAtMillis: Long, operation: PendingIntent\) \{[\s\S]*?\n  \}/;
+    const baseCode = `  private fun setupAlarm(triggerAtMillis: Long, operation: PendingIntent) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()) {
+      AlarmManagerCompat.setExactAndAllowWhileIdle(
+        alarmManager,
+        AlarmManager.RTC_WAKEUP,
+        triggerAtMillis,
+        operation
+      )
+    } else {
+      AlarmManagerCompat.setAndAllowWhileIdle(
+        alarmManager,
+        AlarmManager.RTC_WAKEUP,
+        triggerAtMillis,
+        operation
+      )
+    }
+  }`;
+    schedulingContent = schedulingContent.replace(prevPattern, baseCode);
+  }
+
+  const targetSetup = `  private fun setupAlarm(triggerAtMillis: Long, operation: PendingIntent) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()) {
+      AlarmManagerCompat.setExactAndAllowWhileIdle(
+        alarmManager,
+        AlarmManager.RTC_WAKEUP,
+        triggerAtMillis,
+        operation
+      )
+    } else {
+      AlarmManagerCompat.setAndAllowWhileIdle(
+        alarmManager,
+        AlarmManager.RTC_WAKEUP,
+        triggerAtMillis,
+        operation
+      )
+    }
+  }`;
+
+  const replacementSetup = `  private fun setupAlarm(triggerAtMillis: Long, operation: PendingIntent) {
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        val showIntent = PendingIntent.getActivity(
+          context,
+          operation.hashCode(),
+          context.packageManager.getLaunchIntentForPackage(context.packageName) ?: android.content.Intent(),
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE else PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val info = AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent)
+        alarmManager.setAlarmClock(info, operation)
+        return
+      }
+    } catch (e: Throwable) {
+      Log.w("expo-notifications", "Failed to setAlarmClock, falling back", e)
+    }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()) {
+      AlarmManagerCompat.setExactAndAllowWhileIdle(
+        alarmManager,
+        AlarmManager.RTC_WAKEUP,
+        triggerAtMillis,
+        operation
+      )
+    } else {
+      AlarmManagerCompat.setAndAllowWhileIdle(
+        alarmManager,
+        AlarmManager.RTC_WAKEUP,
+        triggerAtMillis,
+        operation
+      )
+    }
+  }`;
+
+  if (schedulingContent.includes(targetSetup)) {
+    schedulingContent = schedulingContent.replace(targetSetup, replacementSetup);
+    fs.writeFileSync(schedulingFile, schedulingContent, 'utf8');
+    console.log('[Patch] Successfully patched ExpoSchedulingDelegate.kt to use AlarmManager.setAlarmClock.');
+  } else if (schedulingContent.includes('setAlarmClock(info, operation)')) {
+    console.log('[Patch] ExpoSchedulingDelegate.kt already up to date with AlarmClock.');
+  }
+}

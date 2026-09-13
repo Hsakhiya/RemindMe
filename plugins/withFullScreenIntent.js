@@ -4,7 +4,9 @@ const path = require('path');
 
 const ALARM_MODULE_KOTLIN = `package com.remindme.app
 
+import android.app.AlarmManager
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
@@ -43,6 +45,79 @@ class AlarmModule(private val reactContext: ReactApplicationContext) : ReactCont
   }
 
   override fun getName(): String = "AlarmModule"
+
+  @ReactMethod
+  fun scheduleAlarmClock(id: String, triggerAtMillis: Double, title: String, body: String, data: String) {
+    try {
+      val am = reactContext.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+      val alarmIntent = Intent(reactContext, AlarmActivity::class.java).apply {
+        action = "com.remindme.app.ALARM_ACTION"
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
+        putExtra("id", id)
+        putExtra("title", title)
+        putExtra("body", body)
+        putExtra("description", body)
+        putExtra("data", data)
+        putExtra("fullScreen", true)
+      }
+
+      val requestCode = id.hashCode()
+      val piFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+      } else {
+        PendingIntent.FLAG_UPDATE_CURRENT
+      }
+
+      val operation = PendingIntent.getActivity(
+        reactContext,
+        requestCode,
+        alarmIntent,
+        piFlag
+      )
+
+      val showIntent = PendingIntent.getActivity(
+        reactContext,
+        requestCode + 100000,
+        alarmIntent,
+        piFlag
+      )
+
+      val triggerTime = triggerAtMillis.toLong()
+      val info = AlarmManager.AlarmClockInfo(triggerTime, showIntent)
+      am.setAlarmClock(info, operation)
+      Log.i(TAG, "Successfully scheduled setAlarmClock for id=$id at $triggerTime")
+    } catch (e: Throwable) {
+      Log.e(TAG, "Failed to schedule alarm via setAlarmClock", e)
+    }
+  }
+
+  @ReactMethod
+  fun cancelAlarmClock(id: String) {
+    try {
+      val am = reactContext.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+      val alarmIntent = Intent(reactContext, AlarmActivity::class.java).apply {
+        action = "com.remindme.app.ALARM_ACTION"
+      }
+      val requestCode = id.hashCode()
+      val piFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+      } else {
+        PendingIntent.FLAG_UPDATE_CURRENT
+      }
+      val operation = PendingIntent.getActivity(
+        reactContext,
+        requestCode,
+        alarmIntent,
+        piFlag
+      )
+      am.cancel(operation)
+      Log.i(TAG, "Successfully cancelled setAlarmClock for id=$id")
+    } catch (e: Throwable) {
+      Log.e(TAG, "Failed to cancel setAlarmClock", e)
+    }
+  }
 
   @ReactMethod
   fun playAlarmSound() {

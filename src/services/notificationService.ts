@@ -1,9 +1,55 @@
 import { Platform } from 'react-native';
 import { isRunningInExpoGo } from 'expo';
 import { Reminder } from '../types/reminder';
+import { AlarmNativeService } from './alarmNativeService';
 
 export const REMINDER_CHANNEL_ID = 'reminders-channel';
 export const ALARM_CHANNEL_ID = 'alarm-channel-v3';
+
+/**
+ * Calculate the next exact trigger epoch millisecond for a reminder.
+ */
+export function getNextTriggerMillis(reminder: Reminder): number | null {
+  const now = Date.now();
+  if (reminder.stopAt && new Date(reminder.stopAt).getTime() <= now) {
+    return null;
+  }
+  if (reminder.pausedUntil) {
+    const pausedTime = new Date(reminder.pausedUntil).getTime();
+    if (pausedTime > now) return pausedTime;
+  }
+  const targetDate = new Date(reminder.scheduledTime);
+  if (reminder.repeatFrequency === 'none') {
+    return targetDate.getTime() > now ? targetDate.getTime() : null;
+  }
+  if (reminder.repeatFrequency === 'daily') {
+    const next = new Date();
+    next.setHours(targetDate.getHours(), targetDate.getMinutes(), 0, 0);
+    if (next.getTime() <= now) {
+      next.setDate(next.getDate() + 1);
+    }
+    return next.getTime();
+  }
+  if (reminder.repeatFrequency === 'weekly') {
+    const targetDay = targetDate.getDay();
+    const next = new Date();
+    next.setHours(targetDate.getHours(), targetDate.getMinutes(), 0, 0);
+    let daysUntil = (targetDay - next.getDay() + 7) % 7;
+    if (daysUntil === 0 && next.getTime() <= now) {
+      daysUntil = 7;
+    }
+    next.setDate(next.getDate() + daysUntil);
+    return next.getTime();
+  }
+  if (reminder.repeatFrequency === 'interval') {
+    if (targetDate.getTime() > now) {
+      return targetDate.getTime();
+    }
+    const intervalMinutes = reminder.intervalMinutes || 30;
+    return now + intervalMinutes * 60 * 1000;
+  }
+  return targetDate.getTime() > now ? targetDate.getTime() : null;
+}
 
 /**
  * Check if the app is currently running inside the Expo Go sandbox client.
@@ -225,6 +271,27 @@ export async function scheduleReminderNotification(reminder: Reminder): Promise<
       trigger,
     });
 
+    // On Android, also schedule via native AlarmManager.setAlarmClock.
+    // This directly launches AlarmActivity over the lock screen on Google Pixel and Android 14/15 devices.
+    if (Platform.OS === 'android' && isAlarm) {
+      const nextMillis = getNextTriggerMillis(reminder);
+      if (nextMillis && nextMillis > Date.now()) {
+        AlarmNativeService.scheduleAlarmClock(
+          reminder.id,
+          nextMillis,
+          `🚨 ${reminder.title}`,
+          reminder.description || `Reminder: ${reminder.category} priority task`,
+          JSON.stringify({
+            reminderId: reminder.id,
+            category: reminder.category,
+            fullScreen: true,
+            title: reminder.title,
+            description: reminder.description || `Reminder: ${reminder.category} priority task`,
+          })
+        );
+      }
+    }
+
     return notificationId;
   } catch (error) {
     console.warn('Error scheduling native notification:', error);
@@ -237,6 +304,9 @@ export async function scheduleReminderNotification(reminder: Reminder): Promise<
  */
 export async function cancelReminderNotification(notificationId?: string): Promise<void> {
   if (!notificationId || notificationId.startsWith('in_app_')) return;
+  if (Platform.OS === 'android') {
+    AlarmNativeService.cancelAlarmClock(notificationId);
+  }
   const notif = getNativeNotifications();
   if (!notif) return;
 
@@ -337,6 +407,24 @@ export async function sendTestNotificationNow(): Promise<string | null> {
  * Schedule a full-screen alarm in 5 seconds so user can lock phone and test lock screen wake-up.
  */
 export async function scheduleTestAlarm(delaySeconds: number = 5): Promise<string | null> {
+  const triggerTime = Date.now() + Math.max(delaySeconds, 2) * 1000;
+  if (Platform.OS === 'android') {
+    AlarmNativeService.scheduleAlarmClock(
+      'test_alarm_preview',
+      triggerTime,
+      '🚨 Test Full-Screen Alarm',
+      'Lock-screen alarm test! Lock your phone now to test wake-up.',
+      JSON.stringify({
+        testAlarm: true,
+        fullScreen: true,
+        reminderId: 'test_alarm_preview',
+        title: 'Test Full-Screen Alarm',
+        description: 'Lock-screen alarm triggered successfully!',
+        category: 'Urgent',
+      })
+    );
+  }
+
   const notif = getNativeNotifications();
   if (!notif) {
     return 'in_app_test';
