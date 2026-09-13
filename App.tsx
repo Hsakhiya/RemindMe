@@ -10,6 +10,7 @@ import {
   Text,
   Alert,
   Vibration,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
@@ -63,6 +64,7 @@ function ReminderMainScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
   const [activeAlarmReminder, setActiveAlarmReminder] = useState<Reminder | null>(null);
+  const [isLockScreenAlarm, setIsLockScreenAlarm] = useState(false);
 
   // Track triggered reminders in this session to prevent duplicate popups
   const triggeredRef = useRef<Set<string>>(new Set());
@@ -80,15 +82,15 @@ function ReminderMainScreen() {
       () => {
         fetchReminders();
       },
-      (reminderId, data) => {
-        triggerAlarmScreen(reminderId, data);
+      (reminderId, data, isLockScreen) => {
+        triggerAlarmScreen(reminderId, data, isLockScreen ?? true);
       }
     );
 
     // 4. Check if app was opened via notification/fullScreenIntent on cold start
     getLastNotificationAlarm().then((alarmData) => {
       if (alarmData?.reminderId) {
-        triggerAlarmScreen(alarmData.reminderId, alarmData.data);
+        triggerAlarmScreen(alarmData.reminderId, alarmData.data, true);
       }
     });
 
@@ -103,7 +105,8 @@ function ReminderMainScreen() {
     };
   }, []);
 
-  const triggerAlarmScreen = async (reminderId: string, data?: any) => {
+  const triggerAlarmScreen = async (reminderId: string, data?: any, isLockScreen: boolean = false) => {
+    setIsLockScreenAlarm(isLockScreen);
     if (data?.testAlarm || reminderId === 'test_alarm_preview') {
       setActiveAlarmReminder({
         id: 'test_alarm_preview',
@@ -127,18 +130,35 @@ function ReminderMainScreen() {
 
   const handleDismissAlarm = async () => {
     if (!activeAlarmReminder) return;
-    if (activeAlarmReminder.id !== 'test_alarm_preview') {
-      await handleToggle(activeAlarmReminder.id);
+    const reminderId = activeAlarmReminder.id;
+    const wasLockScreen = isLockScreenAlarm;
+
+    if (wasLockScreen) {
+      // Exit app immediately so screen cleanly returns to secure lock screen without exposing reminders list
+      BackHandler.exitApp();
+    }
+
+    if (reminderId !== 'test_alarm_preview') {
+      await handleToggle(reminderId);
     }
     setActiveAlarmReminder(null);
+    setIsLockScreenAlarm(false);
   };
 
   const handleSnoozeAlarm = async () => {
     if (!activeAlarmReminder) return;
-    if (activeAlarmReminder.id !== 'test_alarm_preview') {
-      await handleSnooze(activeAlarmReminder.id);
+    const reminderId = activeAlarmReminder.id;
+    const wasLockScreen = isLockScreenAlarm;
+
+    if (wasLockScreen) {
+      BackHandler.exitApp();
+    }
+
+    if (reminderId !== 'test_alarm_preview') {
+      await handleSnooze(reminderId);
     }
     setActiveAlarmReminder(null);
+    setIsLockScreenAlarm(false);
   };
 
   const fetchReminders = async () => {

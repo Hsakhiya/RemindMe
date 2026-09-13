@@ -245,7 +245,7 @@ export async function cancelReminderNotification(notificationId?: string): Promi
  */
 export function setupNotificationListeners(
   onUpdate: () => void,
-  onAlarmTriggered?: (reminderId: string, data?: any) => void
+  onAlarmTriggered?: (reminderId: string, data?: any, isLockScreen?: boolean) => void
 ): () => void {
   const notif = getNativeNotifications();
   if (!notif) return () => {};
@@ -255,14 +255,14 @@ export function setupNotificationListeners(
       onUpdate();
       const data = notification?.request?.content?.data;
       if (data?.fullScreen && data?.reminderId && onAlarmTriggered) {
-        onAlarmTriggered(data.reminderId, data);
+        onAlarmTriggered(data.reminderId, data, false);
       }
     });
     const sub2 = notif.addNotificationResponseReceivedListener((response: any) => {
       onUpdate();
       const data = response?.notification?.request?.content?.data;
       if (data?.reminderId && onAlarmTriggered) {
-        onAlarmTriggered(data.reminderId, data);
+        onAlarmTriggered(data.reminderId, data, true);
       }
     });
     return () => {
