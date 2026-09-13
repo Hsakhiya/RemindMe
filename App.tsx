@@ -31,6 +31,7 @@ import {
   initNotifications,
   requestNotificationPermissions,
   setupNotificationListeners,
+  getLastNotificationAlarm,
   isExpoGo,
 } from './src/services/notificationService';
 import {
@@ -42,6 +43,7 @@ import { FilterBar } from './src/components/FilterBar';
 import { ReminderCard } from './src/components/ReminderCard';
 import { AddReminderModal } from './src/components/AddReminderModal';
 import { SettingsModal } from './src/components/SettingsModal';
+import { FullScreenAlarmModal } from './src/components/FullScreenAlarmModal';
 import { EmptyState } from './src/components/EmptyState';
 
 function ReminderMainScreen() {
@@ -60,6 +62,7 @@ function ReminderMainScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
+  const [activeAlarmReminder, setActiveAlarmReminder] = useState<Reminder | null>(null);
 
   // Track triggered reminders in this session to prevent duplicate popups
   const triggeredRef = useRef<Set<string>>(new Set());
@@ -72,12 +75,24 @@ function ReminderMainScreen() {
     // 2. Load stored reminders
     fetchReminders();
 
-    // 3. Set up notification event listeners safely (only active outside Expo Go)
-    const unsubscribeListeners = setupNotificationListeners(() => {
-      fetchReminders();
+    // 3. Set up notification event listeners (receives lock-screen full-screen intents)
+    const unsubscribeListeners = setupNotificationListeners(
+      () => {
+        fetchReminders();
+      },
+      (reminderId, data) => {
+        triggerAlarmScreen(reminderId, data);
+      }
+    );
+
+    // 4. Check if app was opened via notification/fullScreenIntent on cold start
+    getLastNotificationAlarm().then((alarmData) => {
+      if (alarmData?.reminderId) {
+        triggerAlarmScreen(alarmData.reminderId, alarmData.data);
+      }
     });
 
-    // 4. In-App Timer Check: checks every 10 seconds for any due reminders
+    // 5. In-App Timer Check: checks every 10 seconds for any due reminders
     const timerInterval = setInterval(() => {
       checkDueReminders();
     }, 10000);
@@ -87,6 +102,44 @@ function ReminderMainScreen() {
       clearInterval(timerInterval);
     };
   }, []);
+
+  const triggerAlarmScreen = async (reminderId: string, data?: any) => {
+    if (data?.testAlarm || reminderId === 'test_alarm_preview') {
+      setActiveAlarmReminder({
+        id: 'test_alarm_preview',
+        title: data?.title || 'Test Full-Screen Alarm',
+        description: data?.description || 'Lock-screen alarm triggered successfully!',
+        scheduledTime: new Date().toISOString(),
+        repeatFrequency: 'none',
+        category: (data?.category as CategoryType) || 'Urgent',
+        isCompleted: false,
+        createdAt: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const currentList = await loadReminders();
+    const found = currentList.find((r) => r.id === reminderId);
+    if (found && !found.isCompleted) {
+      setActiveAlarmReminder(found);
+    }
+  };
+
+  const handleDismissAlarm = async () => {
+    if (!activeAlarmReminder) return;
+    if (activeAlarmReminder.id !== 'test_alarm_preview') {
+      await handleToggle(activeAlarmReminder.id);
+    }
+    setActiveAlarmReminder(null);
+  };
+
+  const handleSnoozeAlarm = async () => {
+    if (!activeAlarmReminder) return;
+    if (activeAlarmReminder.id !== 'test_alarm_preview') {
+      await handleSnooze(activeAlarmReminder.id);
+    }
+    setActiveAlarmReminder(null);
+  };
 
   const fetchReminders = async () => {
     try {
@@ -449,6 +502,14 @@ function ReminderMainScreen() {
       <SettingsModal
         visible={settingsVisible}
         onClose={() => setSettingsVisible(false)}
+      />
+
+      {/* Full-Screen Lock-Screen Alarm Modal */}
+      <FullScreenAlarmModal
+        visible={!!activeAlarmReminder}
+        reminder={activeAlarmReminder}
+        onDismiss={handleDismissAlarm}
+        onSnooze={handleSnoozeAlarm}
       />
     </SafeAreaView>
   );

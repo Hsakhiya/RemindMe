@@ -21,6 +21,7 @@ export interface Reminder {
   category: CategoryType;
   notificationId?: string;
   isCompleted: boolean;
+  isAlarm?: boolean; // When true, wakes device and shows full-screen alarm on lock screen
   createdAt: string;
 }
 
