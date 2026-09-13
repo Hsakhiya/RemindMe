@@ -40,9 +40,9 @@ const builderFile = path.join(
 if (fs.existsSync(builderFile)) {
   let builderContent = fs.readFileSync(builderFile, 'utf8');
 
-  // If already patched with previous version, normalize first
-  if (builderContent.includes('directMainIntent') || builderContent.includes('val fullScreenResponseIntent = createNotificationResponseIntent')) {
-    const prevPattern = /    val defaultAction =[\s\S]*?builder\.setFullScreenIntent\([\s\S]*?\n    \}/;
+  // If already patched with previous version or mutable flag, normalize first
+  if (builderContent.includes('AlarmActivity') || builderContent.includes('directMainIntent') || builderContent.includes('FLAG_MUTABLE')) {
+    const prevPattern = /\s*val defaultAction =[\s\S]*?builder\.setFullScreenIntent\([\s\S]*?\n\s*\}/;
     const baseCode = `    val defaultAction =
       NotificationAction(NotificationResponse.DEFAULT_ACTION_IDENTIFIER, null, true)
     builder.setContentIntent(
@@ -96,7 +96,7 @@ if (fs.existsSync(builderFile)) {
         notificationContent.body?.let { putExtra("data", it.toString()) }
       }
       val mutableFlag = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE
+        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
       } else {
         android.app.PendingIntent.FLAG_UPDATE_CURRENT
       }
@@ -118,7 +118,7 @@ if (fs.existsSync(builderFile)) {
   }
 }
 
-// 3. Patch ExpoPresentationDelegate.kt to wake display via ACQUIRE_CAUSES_WAKEUP
+// 3. Patch ExpoPresentationDelegate.kt to wake display & directly launch AlarmActivity over lock screen
 const presentationFile = path.join(
   __dirname,
   '..',
@@ -138,13 +138,29 @@ const presentationFile = path.join(
 
 if (fs.existsSync(presentationFile)) {
   let presentationContent = fs.readFileSync(presentationFile, 'utf8');
+
+  // If already patched, normalize back to clean base code first
+  if (presentationContent.includes('RemindMe:AlarmWakeDisplay')) {
+    const prevPattern = /    CoroutineScope\(Dispatchers\.IO\)\.launch \{[\s\S]*?val androidNotification = createNotification\(notification, behavior\)/;
+    const baseCode = `    CoroutineScope(Dispatchers.IO).launch {
+      val androidNotification = createNotification(notification, behavior)`;
+    presentationContent = presentationContent.replace(prevPattern, baseCode);
+  }
+
   const targetPresent = `    CoroutineScope(Dispatchers.IO).launch {
       val androidNotification = createNotification(notification, behavior)`;
 
   const replacementPresent = `    CoroutineScope(Dispatchers.IO).launch {
       try {
-        val isAlarm = notification.notificationRequest.content.body?.optBoolean("fullScreen", false) ?: false
+        val content = notification.notificationRequest.content
+        val bodyJson = content.body
+        val hasFullScreen = bodyJson?.optBoolean("fullScreen", false) ?: false
+        val hasAlarmInTitle = content.title?.contains("🚨") == true
+        val hasAlarmInChannel = (notification.notificationRequest.trigger as? expo.modules.notifications.notifications.interfaces.SchedulableNotificationTrigger)?.channelId?.contains("alarm", ignoreCase = true) == true
+        val isAlarm = hasFullScreen || hasAlarmInTitle || hasAlarmInChannel
+
         if (isAlarm) {
+          // 1. Wake physical screen illumination immediately
           val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
           @Suppress("DEPRECATION")
           val wakeLock = pm?.newWakeLock(
@@ -153,7 +169,42 @@ if (fs.existsSync(presentationFile)) {
             android.os.PowerManager.ON_AFTER_RELEASE,
             "RemindMe:AlarmWakeDisplay"
           )
-          wakeLock?.acquire(15000)
+          wakeLock?.acquire(30000)
+
+          // 2. Directly launch AlarmActivity over lock screen
+          try {
+            val alarmIntent = android.content.Intent(context, Class.forName("\${context.packageName}.AlarmActivity")).apply {
+              flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                      android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                      android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+              action = "com.remindme.app.ALARM_ACTION"
+              putExtra("notificationResponse", notification)
+              putExtra("fullScreen", true)
+              putExtra("title", content.title)
+              putExtra("body", content.text)
+              putExtra("description", content.text)
+              bodyJson?.let { putExtra("data", it.toString()) }
+            }
+            context.startActivity(alarmIntent)
+          } catch (e: Throwable) {
+            android.util.Log.e("ExpoPresentationDelegate", "Direct startActivity failed", e)
+            try {
+              val piFlag = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+              } else {
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT
+              }
+              val pi = android.app.PendingIntent.getActivity(
+                context,
+                notification.notificationRequest.identifier.hashCode(),
+                alarmIntent,
+                piFlag
+              )
+              pi.send()
+            } catch (pe: Throwable) {
+              android.util.Log.e("ExpoPresentationDelegate", "PendingIntent fallback send failed", pe)
+            }
+          }
         }
       } catch (e: Throwable) {
         // Graceful fallback
@@ -163,8 +214,8 @@ if (fs.existsSync(presentationFile)) {
   if (presentationContent.includes(targetPresent)) {
     presentationContent = presentationContent.replace(targetPresent, replacementPresent);
     fs.writeFileSync(presentationFile, presentationContent, 'utf8');
-    console.log('[Patch] Successfully patched ExpoPresentationDelegate.kt for ACQUIRE_CAUSES_WAKEUP display wake-up.');
+    console.log('[Patch] Successfully patched ExpoPresentationDelegate.kt with direct startActivity launch & ACQUIRE_CAUSES_WAKEUP.');
   } else if (presentationContent.includes('AlarmWakeDisplay')) {
-    console.log('[Patch] ExpoPresentationDelegate.kt already patched for display wake-up.');
+    console.log('[Patch] ExpoPresentationDelegate.kt already up to date.');
   }
 }

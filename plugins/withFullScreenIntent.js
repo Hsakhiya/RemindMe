@@ -155,8 +155,10 @@ class AlarmPackage : ReactPackage {
 const ALARM_ACTIVITY_KOTLIN = `package com.remindme.app
 
 import android.app.Activity
+import android.app.AlarmManager
 import android.app.KeyguardManager
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -197,9 +199,9 @@ class AlarmActivity : Activity() {
   private var wakeLock: PowerManager.WakeLock? = null
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    setupWindowFlags()
     super.onCreate(savedInstanceState)
 
-    setupWindowFlags()
     acquireWakeLock()
     startAlarmSound()
     startVibration()
@@ -223,16 +225,14 @@ class AlarmActivity : Activity() {
       setTurnScreenOn(true)
       val km = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
       km?.requestDismissKeyguard(this, null)
-    } else {
-      @Suppress("DEPRECATION")
-      window.addFlags(
-        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
-      )
     }
-    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    @Suppress("DEPRECATION")
+    window.addFlags(
+      WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+      WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+      WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+      WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+    )
   }
 
   private fun acquireWakeLock() {
@@ -574,12 +574,33 @@ class AlarmActivity : Activity() {
 
   private fun snoozeReminder() {
     try {
-      val intent = Intent("com.remindme.app.SNOOZE_ALARM").apply {
-        setPackage(packageName)
+      val snoozeIntent = Intent(this, AlarmActivity::class.java).apply {
+        action = "com.remindme.app.ALARM_ACTION"
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        putExtra("title", intent.getStringExtra("title") ?: "Snoozed Reminder")
+        putExtra("body", intent.getStringExtra("body") ?: "Snoozed reminder is due now")
+        putExtra("data", intent.getStringExtra("data"))
       }
-      sendBroadcast(intent)
+      val piFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+      } else {
+        PendingIntent.FLAG_UPDATE_CURRENT
+      }
+      val pi = PendingIntent.getActivity(
+        this,
+        (System.currentTimeMillis() % 100000).toInt(),
+        snoozeIntent,
+        piFlag
+      )
+      val am = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+      val triggerAtMillis = System.currentTimeMillis() + 10 * 60 * 1000
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        am?.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi)
+      } else {
+        am?.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi)
+      }
     } catch (e: Throwable) {
-      Log.w(TAG, "Error broadcasting snooze", e)
+      Log.w(TAG, "Error snoozing reminder", e)
     }
   }
 
@@ -680,9 +701,10 @@ const withFullScreenIntent = (config) => {
       alarmActivity.$['android:showOnLockScreen'] = 'true';
       alarmActivity.$['android:excludeFromRecents'] = 'true';
       alarmActivity.$['android:noHistory'] = 'true';
-      alarmActivity.$['android:launchMode'] = 'singleTask';
+      alarmActivity.$['android:launchMode'] = 'singleInstance';
+      alarmActivity.$['android:taskAffinity'] = 'com.remindme.app.alarm';
       alarmActivity.$['android:screenOrientation'] = 'portrait';
-      alarmActivity.$['android:theme'] = '@style/Theme.App.SplashScreen';
+      alarmActivity.$['android:theme'] = '@style/AppTheme';
     }
 
     return config;
