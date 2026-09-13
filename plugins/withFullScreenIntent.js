@@ -1,16 +1,168 @@
-const { withAndroidManifest, withMainActivity } = require('@expo/config-plugins');
+const { withAndroidManifest, withMainActivity, withMainApplication, withDangerousMod } = require('@expo/config-plugins');
+const fs = require('fs');
+const path = require('path');
+
+const ALARM_MODULE_KOTLIN = `package com.remindme.app
+
+import android.app.NotificationManager
+import android.content.Context
+import android.content.Intent
+import android.media.AudioAttributes
+import android.media.Ringtone
+import android.media.RingtoneManager
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
+import android.util.Log
+import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.ReactContextBaseJavaModule
+import com.facebook.react.bridge.ReactMethod
+
+class AlarmModule(private val reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
+
+  companion object {
+    private const val TAG = "AlarmModule"
+    private var ringtone: Ringtone? = null
+
+    fun stopRingtone() {
+      try {
+        ringtone?.let {
+          if (it.isPlaying) {
+            it.stop()
+          }
+        }
+        ringtone = null
+      } catch (e: Throwable) {
+        Log.w(TAG, "Error stopping ringtone statically", e)
+      }
+    }
+  }
+
+  override fun getName(): String = "AlarmModule"
+
+  @ReactMethod
+  fun playAlarmSound() {
+    val activity = currentActivity
+    val ctx = activity ?: reactContext
+
+    ctx.runOnUiThread {
+      try {
+        if (ringtone == null || !ringtone!!.isPlaying) {
+          val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+          ringtone = RingtoneManager.getRingtone(reactContext.applicationContext, alarmUri)?.apply {
+            audioAttributes = AudioAttributes.Builder()
+              .setUsage(AudioAttributes.USAGE_ALARM)
+              .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+              .build()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+              isLooping = true
+            }
+            play()
+          }
+        }
+      } catch (e: Throwable) {
+        Log.e(TAG, "Error playing alarm ringtone", e)
+      }
+    }
+  }
+
+  @ReactMethod
+  fun stopAlarmSound() {
+    val activity = currentActivity
+    val ctx = activity ?: reactContext
+
+    ctx.runOnUiThread {
+      stopRingtone()
+    }
+  }
+
+  @ReactMethod
+  fun wakeScreen() {
+    val activity = currentActivity
+    val ctx = activity ?: reactContext
+
+    ctx.runOnUiThread {
+      try {
+        val powerManager = reactContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        @Suppress("DEPRECATION")
+        val wakeLock = powerManager?.newWakeLock(
+          PowerManager.FULL_WAKE_LOCK or
+          PowerManager.ACQUIRE_CAUSES_WAKEUP or
+          PowerManager.ON_AFTER_RELEASE,
+          "RemindMe:AlarmModuleWake"
+        )
+        wakeLock?.acquire(10000)
+      } catch (e: Throwable) {
+        Log.e(TAG, "Error acquiring wake lock", e)
+      }
+    }
+  }
+
+  @ReactMethod
+  fun canUseFullScreenIntent(promise: Promise) {
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        val notificationManager = reactContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        promise.resolve(notificationManager?.canUseFullScreenIntent() ?: true)
+      } else {
+        promise.resolve(true)
+      }
+    } catch (e: Throwable) {
+      promise.resolve(true)
+    }
+  }
+
+  @ReactMethod
+  fun openFullScreenIntentSettings() {
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+          data = Uri.parse("package:\${reactContext.packageName}")
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        reactContext.startActivity(intent)
+      } else {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+          data = Uri.parse("package:\${reactContext.packageName}")
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        reactContext.startActivity(intent)
+      }
+    } catch (e: Throwable) {
+      Log.e(TAG, "Error opening full screen intent settings", e)
+    }
+  }
+}
+`;
+
+const ALARM_PACKAGE_KOTLIN = `package com.remindme.app
+
+import android.view.View
+import com.facebook.react.ReactPackage
+import com.facebook.react.bridge.NativeModule
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.uimanager.ReactShadowNode
+import com.facebook.react.uimanager.ViewManager
+
+class AlarmPackage : ReactPackage {
+  override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
+    return listOf(AlarmModule(reactContext))
+  }
+
+  override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<View, ReactShadowNode<*>>> {
+    return emptyList()
+  }
+}
+`;
 
 /**
  * Expo Config Plugin to handle Android Full-Screen Intent securely.
- *
- * 1. AndroidManifest:
- *    - Adds required permissions: USE_FULL_SCREEN_INTENT, WAKE_LOCK, SCHEDULE_EXACT_ALARM, VIBRATE.
- *    - Ensures MainActivity does NOT statically have showWhenLocked="true", which would bypass the lock screen during normal usage.
- *    - Attaches showWhenLocked="true" and turnScreenOn="true" to NotificationForwarderActivity so the notification trampoline can execute over the lock screen.
- *
- * 2. MainActivity.kt:
- *    - Dynamically enables setShowWhenLocked(true) and setTurnScreenOn(true) ONLY when launched or awakened by an alarm notification intent.
- *    - Clears lock-screen flags on normal app launch, onPause, and onStop so the device remains securely locked during normal use.
  */
 const withFullScreenIntent = (config) => {
   // 1. AndroidManifest configuration
@@ -47,9 +199,6 @@ const withFullScreenIntent = (config) => {
 
     const application = androidManifest.manifest.application?.[0];
     if (application && Array.isArray(application.activity)) {
-      // 1. Ensure MainActivity does NOT have static showWhenLocked attributes.
-      // Having showWhenLocked="true" statically on MainActivity causes the device
-      // to bypass the secure lock screen even during normal app usage.
       const mainActivity = application.activity.find(
         (act) => act.$ && act.$['android:name'] === '.MainActivity'
       );
@@ -60,7 +209,6 @@ const withFullScreenIntent = (config) => {
         delete mainActivity.$['android:inheritShowWhenLocked'];
       }
 
-      // 2. Configure NotificationForwarderActivity to allow full-screen intent trampoline on lock screen
       let forwarderActivity = application.activity.find(
         (act) => act.$ && act.$['android:name'] === 'expo.modules.notifications.service.NotificationForwarderActivity'
       );
@@ -79,19 +227,52 @@ const withFullScreenIntent = (config) => {
     return config;
   });
 
-  // 2. MainActivity.kt configuration for dynamic lock-screen window flags
+  // 2. DangerousMod: Write AlarmModule.kt and AlarmPackage.kt into native Android directory
+  config = withDangerousMod(config, [
+    'android',
+    async (config) => {
+      const projectRoot = config.modRequest.platformProjectRoot;
+      const targetDir = path.join(projectRoot, 'app', 'src', 'main', 'java', 'com', 'remindme', 'app');
+
+      if (fs.existsSync(targetDir)) {
+        fs.writeFileSync(path.join(targetDir, 'AlarmModule.kt'), ALARM_MODULE_KOTLIN, 'utf8');
+        fs.writeFileSync(path.join(targetDir, 'AlarmPackage.kt'), ALARM_PACKAGE_KOTLIN, 'utf8');
+      }
+      return config;
+    },
+  ]);
+
+  // 3. MainApplication.kt: Register AlarmPackage
+  config = withMainApplication(config, (config) => {
+    let contents = config.modResults.contents;
+    if (!contents.includes('add(AlarmPackage())')) {
+      if (contents.includes('// add(MyReactNativePackage())')) {
+        contents = contents.replace(
+          '// add(MyReactNativePackage())',
+          '// add(MyReactNativePackage())\n          add(AlarmPackage())'
+        );
+      } else if (contents.includes('PackageList(this).packages.apply {')) {
+        contents = contents.replace(
+          'PackageList(this).packages.apply {',
+          'PackageList(this).packages.apply {\n          add(AlarmPackage())'
+        );
+      }
+    }
+    config.modResults.contents = contents;
+    return config;
+  });
+
+  // 4. MainActivity.kt configuration for dynamic lock-screen window flags
   config = withMainActivity(config, (config) => {
     let contents = config.modResults.contents;
 
-    // Add necessary imports if missing
     if (!contents.includes('import android.content.Intent')) {
       contents = contents.replace(
         'import android.os.Bundle',
-        'import android.os.Bundle\nimport android.content.Intent\nimport android.view.WindowManager'
+        'import android.os.Bundle\nimport android.content.Intent\nimport android.view.WindowManager\nimport android.os.PowerManager\nimport android.content.Context'
       );
     }
 
-    // Call handleLockScreenIntent(intent) in onCreate
     if (!contents.includes('handleLockScreenIntent(intent)')) {
       contents = contents.replace(
         'super.onCreate(null)',
@@ -99,7 +280,6 @@ const withFullScreenIntent = (config) => {
       );
     }
 
-    // Add onNewIntent, onPause, onStop, and helper functions if not present
     if (!contents.includes('fun handleLockScreenIntent')) {
       const helperMethods = `
   override fun onNewIntent(intent: Intent) {
@@ -110,11 +290,13 @@ const withFullScreenIntent = (config) => {
 
   override fun onPause() {
     super.onPause()
+    AlarmModule.stopRingtone()
     resetLockScreenFlags()
   }
 
   override fun onStop() {
     super.onStop()
+    AlarmModule.stopRingtone()
     resetLockScreenFlags()
   }
 
@@ -143,6 +325,20 @@ const withFullScreenIntent = (config) => {
 
   private fun enableLockScreenFlags() {
     runOnUiThread {
+      try {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        @Suppress("DEPRECATION")
+        val wakeLock = powerManager?.newWakeLock(
+          PowerManager.FULL_WAKE_LOCK or
+          PowerManager.ACQUIRE_CAUSES_WAKEUP or
+          PowerManager.ON_AFTER_RELEASE,
+          "RemindMe:MainActivityWake"
+        )
+        wakeLock?.acquire(10000)
+      } catch (e: Throwable) {
+        // Fallback gracefully
+      }
+
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
         setShowWhenLocked(true)
         setTurnScreenOn(true)

@@ -21,6 +21,7 @@ import {
   BackgroundKey,
 } from '../theme/theme';
 import { sendTestNotificationNow, scheduleTestAlarm } from '../services/notificationService';
+import { AlarmNativeService } from '../services/alarmNativeService';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -363,6 +364,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {alarmCountdown !== null ? `${alarmCountdown}s` : '5s Test'}
                 </Text>
               </View>
+            </TouchableOpacity>
+
+            {/* Lock Screen Permissions (Android 14+ / OEM Display Over Lock Screen) */}
+            <TouchableOpacity
+              style={[
+                styles.testAlertBox,
+                {
+                  backgroundColor: theme.background,
+                  borderColor: theme.surfaceBorder,
+                  marginTop: 10,
+                },
+              ]}
+              onPress={() => AlarmNativeService.openFullScreenIntentSettings()}
+              activeOpacity={0.8}
+            >
+              <View style={styles.testAlertInfo}>
+                <Ionicons
+                  name="shield-checkmark"
+                  size={30}
+                  color={theme.primaryLight}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.testAlertTitle, { color: theme.text }]}>
+                    Lock Screen & Alarm Permission
+                  </Text>
+                  <Text
+                    style={[styles.testAlertSubtitle, { color: theme.textMuted }]}
+                  >
+                    Check & allow 'Show on lock screen' and full-screen intents
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="open-outline" size={18} color={theme.textMuted} />
             </TouchableOpacity>
 
             {/* Section: About & App Info */}

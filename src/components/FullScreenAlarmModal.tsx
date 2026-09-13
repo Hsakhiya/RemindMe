@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Reminder } from '../types/reminder';
 import { useTheme } from '../context/ThemeContext';
+import { AlarmNativeService } from '../services/alarmNativeService';
 
 interface FullScreenAlarmModalProps {
   visible: boolean;
@@ -53,11 +54,15 @@ export const FullScreenAlarmModal: React.FC<FullScreenAlarmModalProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Continuous vibration and pulsing animation while visible
+  // Continuous vibration, alarm ringtone audio, and pulsing animation while visible
   useEffect(() => {
     let animInstance: Animated.CompositeAnimation | null = null;
 
     if (visible) {
+      // Wake up physical display and play system alarm ringtone on loop
+      AlarmNativeService.wakeScreen();
+      AlarmNativeService.playAlarmSound();
+
       // Continuous looping vibration pattern
       Vibration.vibrate([0, 800, 400, 800, 400, 1000], true);
 
@@ -92,10 +97,12 @@ export const FullScreenAlarmModal: React.FC<FullScreenAlarmModalProps> = ({
       );
       animInstance.start();
     } else {
+      AlarmNativeService.stopAlarmSound();
       Vibration.cancel();
     }
 
     return () => {
+      AlarmNativeService.stopAlarmSound();
       Vibration.cancel();
       if (animInstance) {
         animInstance.stop();
@@ -110,11 +117,13 @@ export const FullScreenAlarmModal: React.FC<FullScreenAlarmModalProps> = ({
   const category = reminder?.category || 'Urgent';
 
   const handleDismiss = () => {
+    AlarmNativeService.stopAlarmSound();
     Vibration.cancel();
     onDismiss();
   };
 
   const handleSnooze = () => {
+    AlarmNativeService.stopAlarmSound();
     Vibration.cancel();
     onSnooze(10);
   };
