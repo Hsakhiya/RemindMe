@@ -11,6 +11,7 @@ import {
   Alert,
   Vibration,
   BackHandler,
+  Platform,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
@@ -35,6 +36,7 @@ import {
   getLastNotificationAlarm,
   isExpoGo,
 } from './src/services/notificationService';
+import { AlarmNativeService } from './src/services/alarmNativeService';
 import {
   isWithinDisabledRange,
   calculateNextIntervalTime,
@@ -53,6 +55,7 @@ function ReminderMainScreen() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasFullScreenPermission, setHasFullScreenPermission] = useState(true);
 
   // Filters
   const [currentTab, setCurrentTab] = useState<FilterStatus>('all');
@@ -73,6 +76,12 @@ function ReminderMainScreen() {
     // 1. Initialize notification channel and permissions safely
     initNotifications();
     requestNotificationPermissions();
+
+    if (Platform.OS === 'android') {
+      AlarmNativeService.canUseFullScreenIntent().then((canUse) => {
+        setHasFullScreenPermission(canUse);
+      });
+    }
 
     // 2. Load stored reminders
     fetchReminders();
@@ -435,6 +444,32 @@ function ReminderMainScreen() {
         </View>
       )}
 
+      {/* Lock screen permission warning banner on Android */}
+      {!hasFullScreenPermission && Platform.OS === 'android' && (
+        <TouchableOpacity
+          style={styles.permissionBanner}
+          onPress={async () => {
+            await AlarmNativeService.openFullScreenIntentSettings();
+            setTimeout(async () => {
+              const allowed = await AlarmNativeService.canUseFullScreenIntent();
+              setHasFullScreenPermission(allowed);
+            }, 1000);
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="warning-outline" size={18} color="#F59E0B" />
+          <View style={styles.permissionBannerContent}>
+            <Text style={styles.permissionBannerTitle}>
+              Lock Screen Alarms Permission Required
+            </Text>
+            <Text style={styles.permissionBannerSubtitle}>
+              Tap to allow "Full-screen intents" so alarms wake your phone when locked.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#F59E0B" />
+        </TouchableOpacity>
+      )}
+
       {/* App Header & Stat Overview */}
       <Header
         totalPending={metrics.totalPending}
@@ -564,6 +599,29 @@ const styles = StyleSheet.create({
   expoGoBannerText: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  permissionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245, 158, 11, 0.3)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  permissionBannerContent: {
+    flex: 1,
+  },
+  permissionBannerTitle: {
+    color: '#F8FAFC',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  permissionBannerSubtitle: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    marginTop: 2,
   },
   loadingContainer: {
     flex: 1,

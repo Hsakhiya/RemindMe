@@ -3,7 +3,7 @@ import { isRunningInExpoGo } from 'expo';
 import { Reminder } from '../types/reminder';
 
 export const REMINDER_CHANNEL_ID = 'reminders-channel';
-export const ALARM_CHANNEL_ID = 'alarm-channel';
+export const ALARM_CHANNEL_ID = 'alarm-channel-v3';
 
 /**
  * Check if the app is currently running inside the Expo Go sandbox client.
@@ -64,6 +64,12 @@ export async function initNotifications(): Promise<void> {
         showBadge: true,
         enableLights: true,
       });
+
+      // Clean up any stale or cached legacy channels so Android uses fresh settings
+      try {
+        await notif.deleteNotificationChannelAsync('alarm-channel');
+        await notif.deleteNotificationChannelAsync('alarm-channel-v2');
+      } catch {}
 
       // 2. High-Priority Full-Screen Alarm Channel (Wakes Screen & Overlays Lock Screen)
       await notif.setNotificationChannelAsync(ALARM_CHANNEL_ID, {
@@ -210,6 +216,8 @@ export async function scheduleReminderNotification(reminder: Reminder): Promise<
           reminderId: reminder.id,
           category: reminder.category,
           fullScreen: isAlarm,
+          title: reminder.title,
+          description: reminder.description || `Reminder: ${reminder.category} priority task`,
         },
         sound: true,
         priority: notif.AndroidNotificationPriority.MAX,

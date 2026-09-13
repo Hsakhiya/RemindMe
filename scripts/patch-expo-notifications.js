@@ -41,8 +41,8 @@ if (fs.existsSync(builderFile)) {
   let builderContent = fs.readFileSync(builderFile, 'utf8');
 
   // If already patched with previous version, normalize first
-  if (builderContent.includes('val fullScreenResponseIntent = createNotificationResponseIntent')) {
-    const prevPattern = /val defaultAction =[\s\S]*?if \(isFullScreen\) \{[\s\S]*?builder\.setFullScreenIntent\(fullScreenResponseIntent, true\)[\s\S]*?\}/;
+  if (builderContent.includes('directMainIntent') || builderContent.includes('val fullScreenResponseIntent = createNotificationResponseIntent')) {
+    const prevPattern = /    val defaultAction =[\s\S]*?builder\.setFullScreenIntent\([\s\S]*?\n    \}/;
     const baseCode = `    val defaultAction =
       NotificationAction(NotificationResponse.DEFAULT_ACTION_IDENTIFIER, null, true)
     builder.setContentIntent(
@@ -83,14 +83,16 @@ if (fs.existsSync(builderFile)) {
       builder.setVisibility(androidx.core.app.NotificationCompat.VISIBILITY_PUBLIC)
       builder.priority = androidx.core.app.NotificationCompat.PRIORITY_MAX
 
-      val directMainIntent = (context.packageManager.getLaunchIntentForPackage(context.packageName)
-        ?: android.content.Intent(context, Class.forName("\${context.packageName}.MainActivity"))).apply {
+      val directAlarmIntent = android.content.Intent(context, Class.forName("\${context.packageName}.AlarmActivity")).apply {
         flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
                 android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or
                 android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
-        action = "expo.modules.notifications.OPEN_APP_ACTION"
+        action = "com.remindme.app.ALARM_ACTION"
         putExtra("notificationResponse", notification)
         putExtra("fullScreen", true)
+        putExtra("title", notificationContent.title)
+        putExtra("body", notificationContent.text)
+        putExtra("description", notificationContent.text)
         notificationContent.body?.let { putExtra("data", it.toString()) }
       }
       val mutableFlag = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
@@ -101,7 +103,7 @@ if (fs.existsSync(builderFile)) {
       val directFullScreenPendingIntent = android.app.PendingIntent.getActivity(
         context,
         notification.notificationRequest.identifier.hashCode(),
-        directMainIntent,
+        directAlarmIntent,
         mutableFlag
       )
       builder.setFullScreenIntent(directFullScreenPendingIntent, true)
@@ -110,9 +112,9 @@ if (fs.existsSync(builderFile)) {
   if (builderContent.includes(targetCode)) {
     builderContent = builderContent.replace(targetCode, replacementCode);
     fs.writeFileSync(builderFile, builderContent, 'utf8');
-    console.log('[Patch] Successfully patched ExpoNotificationBuilder.kt with direct MainActivity Full-Screen Intent.');
-  } else if (builderContent.includes('directFullScreenPendingIntent')) {
-    console.log('[Patch] ExpoNotificationBuilder.kt already up to date with direct Full-Screen Intent.');
+    console.log('[Patch] Successfully patched ExpoNotificationBuilder.kt with direct AlarmActivity Full-Screen Intent.');
+  } else if (builderContent.includes('AlarmActivity')) {
+    console.log('[Patch] ExpoNotificationBuilder.kt already up to date with AlarmActivity Full-Screen Intent.');
   }
 }
 
