@@ -12,6 +12,8 @@ import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
@@ -44,12 +46,9 @@ class AlarmModule(private val reactContext: ReactApplicationContext) : ReactCont
 
   @ReactMethod
   fun playAlarmSound() {
-    val activity = currentActivity
-    val ctx = activity ?: reactContext
-
-    ctx.runOnUiThread {
+    Handler(Looper.getMainLooper()).post {
       try {
-        if (ringtone == null || !ringtone!!.isPlaying) {
+        if (ringtone == null || ringtone?.isPlaying != true) {
           val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
@@ -74,33 +73,25 @@ class AlarmModule(private val reactContext: ReactApplicationContext) : ReactCont
 
   @ReactMethod
   fun stopAlarmSound() {
-    val activity = currentActivity
-    val ctx = activity ?: reactContext
-
-    ctx.runOnUiThread {
+    Handler(Looper.getMainLooper()).post {
       stopRingtone()
     }
   }
 
   @ReactMethod
   fun wakeScreen() {
-    val activity = currentActivity
-    val ctx = activity ?: reactContext
-
-    ctx.runOnUiThread {
-      try {
-        val powerManager = reactContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
-        @Suppress("DEPRECATION")
-        val wakeLock = powerManager?.newWakeLock(
-          PowerManager.FULL_WAKE_LOCK or
-          PowerManager.ACQUIRE_CAUSES_WAKEUP or
-          PowerManager.ON_AFTER_RELEASE,
-          "RemindMe:AlarmModuleWake"
-        )
-        wakeLock?.acquire(10000)
-      } catch (e: Throwable) {
-        Log.e(TAG, "Error acquiring wake lock", e)
-      }
+    try {
+      val powerManager = reactContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+      @Suppress("DEPRECATION")
+      val wakeLock = powerManager?.newWakeLock(
+        PowerManager.FULL_WAKE_LOCK or
+        PowerManager.ACQUIRE_CAUSES_WAKEUP or
+        PowerManager.ON_AFTER_RELEASE,
+        "RemindMe:AlarmModuleWake"
+      )
+      wakeLock?.acquire(10000)
+    } catch (e: Throwable) {
+      Log.e(TAG, "Error acquiring wake lock", e)
     }
   }
 
