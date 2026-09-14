@@ -2,7 +2,7 @@
   "expo": {
     "name": "RemindMe",
     "slug": "remind-me-app",
-    "version": "1.1.6",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.remindme.app",
-      "versionCode": 8,
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#1E293B",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -27,8 +27,7 @@
         "USE_EXACT_ALARM",
         "POST_NOTIFICATIONS",
         "VIBRATE",
-        "WAKE_LOCK",
-        "USE_FULL_SCREEN_INTENT"
+        "WAKE_LOCK"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -63,13 +62,12 @@
             }
           ]
         }
-      ],
-      "./plugins/withFullScreenIntent.js"
+      ]
     ],
     "updates": {
       "url": "https://u.expo.dev/7d6d6e88-c074-4a33-928f-d2ef22f0fb0f"
     },
-    "runtimeVersion": "1.1.6",
+    "runtimeVersion": "1.0.0",
     "extra": {
       "eas": {
         "projectId": "7d6d6e88-c074-4a33-928f-d2ef22f0fb0f"

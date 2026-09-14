@@ -20,8 +20,7 @@ import {
   ThemeKey,
   BackgroundKey,
 } from '../theme/theme';
-import { sendTestNotificationNow, scheduleTestAlarm } from '../services/notificationService';
-import { AlarmNativeService } from '../services/alarmNativeService';
+import { sendTestNotificationNow } from '../services/notificationService';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -39,37 +38,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateStatusText, setUpdateStatusText] = useState<string | null>(null);
-  const [alarmCountdown, setAlarmCountdown] = useState<number | null>(null);
 
   const handleTestAlert = async () => {
     await sendTestNotificationNow();
-  };
-
-  const handleTestFullScreenAlarm = async () => {
-    Alert.alert(
-      'Test Full-Screen Lock Alarm',
-      'The test alarm will trigger in 5 seconds.\n\n👉 LOCK YOUR PHONE NOW to test whether the screen wakes up and displays the full-screen alarm over your lock screen!',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Start 5s Test',
-          style: 'default',
-          onPress: async () => {
-            setAlarmCountdown(5);
-            await scheduleTestAlarm(5);
-            const timer = setInterval(() => {
-              setAlarmCountdown((prev) => {
-                if (prev === null || prev <= 1) {
-                  clearInterval(timer);
-                  return null;
-                }
-                return prev - 1;
-              });
-            }, 1000);
-          },
-        },
-      ]
-    );
   };
 
   const handleCheckUpdates = async () => {
@@ -320,83 +291,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
-            </TouchableOpacity>
-
-            {/* Test Full-Screen Alarm (5s Delay) */}
-            <TouchableOpacity
-              style={[
-                styles.testAlertBox,
-                {
-                  backgroundColor: theme.background,
-                  borderColor: theme.surfaceBorder,
-                  marginTop: 10,
-                },
-              ]}
-              onPress={handleTestFullScreenAlarm}
-              activeOpacity={0.8}
-            >
-              <View style={styles.testAlertInfo}>
-                <Ionicons
-                  name="alarm"
-                  size={30}
-                  color="#EF4444"
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.testAlertTitle, { color: theme.text }]}>
-                    {alarmCountdown !== null
-                      ? `Alarm firing in ${alarmCountdown}s! Lock now!`
-                      : 'Test Full-Screen Lock Alarm'}
-                  </Text>
-                  <Text
-                    style={[styles.testAlertSubtitle, { color: theme.textMuted }]}
-                  >
-                    Fires in 5s — lock your screen to test wake-up
-                  </Text>
-                </View>
-              </View>
-              <View
-                style={[
-                  styles.badgeContainer,
-                  { backgroundColor: 'rgba(239, 68, 68, 0.15)' },
-                ]}
-              >
-                <Text style={[styles.badgeText, { color: '#EF4444', fontSize: 11 }]}>
-                  {alarmCountdown !== null ? `${alarmCountdown}s` : '5s Test'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Lock Screen Permissions (Android 14+ / OEM Display Over Lock Screen) */}
-            <TouchableOpacity
-              style={[
-                styles.testAlertBox,
-                {
-                  backgroundColor: theme.background,
-                  borderColor: theme.surfaceBorder,
-                  marginTop: 10,
-                },
-              ]}
-              onPress={() => AlarmNativeService.openFullScreenIntentSettings()}
-              activeOpacity={0.8}
-            >
-              <View style={styles.testAlertInfo}>
-                <Ionicons
-                  name="shield-checkmark"
-                  size={30}
-                  color={theme.primaryLight}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.testAlertTitle, { color: theme.text }]}>
-                    Lock Screen & Alarm Permission
-                  </Text>
-                  <Text
-                    style={[styles.testAlertSubtitle, { color: theme.textMuted }]}
-                  >
-                    Check & allow 'Show on lock screen' and full-screen intents
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="open-outline" size={18} color={theme.textMuted} />
             </TouchableOpacity>
 
             {/* Section: About & App Info */}

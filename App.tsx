@@ -10,9 +10,6 @@ import {
   Text,
   Alert,
   Vibration,
-  BackHandler,
-  Platform,
-  AppState,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
@@ -34,10 +31,8 @@ import {
   initNotifications,
   requestNotificationPermissions,
   setupNotificationListeners,
-  getLastNotificationAlarm,
   isExpoGo,
 } from './src/services/notificationService';
-import { AlarmNativeService } from './src/services/alarmNativeService';
 import {
   isWithinDisabledRange,
   calculateNextIntervalTime,
@@ -47,7 +42,6 @@ import { FilterBar } from './src/components/FilterBar';
 import { ReminderCard } from './src/components/ReminderCard';
 import { AddReminderModal } from './src/components/AddReminderModal';
 import { SettingsModal } from './src/components/SettingsModal';
-import { FullScreenAlarmModal } from './src/components/FullScreenAlarmModal';
 import { EmptyState } from './src/components/EmptyState';
 
 function ReminderMainScreen() {
@@ -56,7 +50,6 @@ function ReminderMainScreen() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [hasFullScreenPermission, setHasFullScreenPermission] = useState(true);
 
   // Filters
   const [currentTab, setCurrentTab] = useState<FilterStatus>('all');
@@ -67,8 +60,6 @@ function ReminderMainScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
-  const [activeAlarmReminder, setActiveAlarmReminder] = useState<Reminder | null>(null);
-  const [isLockScreenAlarm, setIsLockScreenAlarm] = useState(false);
 
   // Track triggered reminders in this session to prevent duplicate popups
   const triggeredRef = useRef<Set<string>>(new Set());
@@ -78,108 +69,24 @@ function ReminderMainScreen() {
     initNotifications();
     requestNotificationPermissions();
 
-    if (Platform.OS === 'android') {
-      AlarmNativeService.canUseFullScreenIntent().then((canUse) => {
-        setHasFullScreenPermission(canUse);
-      });
-    }
-
     // 2. Load stored reminders
     fetchReminders();
 
-    // 3. Set up notification event listeners (receives lock-screen full-screen intents)
-    const unsubscribeListeners = setupNotificationListeners(
-      () => {
-        fetchReminders();
-      },
-      (reminderId, data, isLockScreen) => {
-        triggerAlarmScreen(reminderId, data, isLockScreen ?? true);
-      }
-    );
-
-    // 4. Check if app was opened via notification/fullScreenIntent on cold start
-    getLastNotificationAlarm().then((alarmData) => {
-      if (alarmData?.reminderId) {
-        triggerAlarmScreen(alarmData.reminderId, alarmData.data, true);
-      }
+    // 3. Set up notification event listeners safely (only active outside Expo Go)
+    const unsubscribeListeners = setupNotificationListeners(() => {
+      fetchReminders();
     });
 
-    // 5. In-App Timer Check: checks every 10 seconds for any due reminders
+    // 4. In-App Timer Check: checks every 10 seconds for any due reminders
     const timerInterval = setInterval(() => {
       checkDueReminders();
     }, 10000);
 
-    // 6. Listen for app foregrounding to re-check full-screen permission when returning from settings
-    const appStateSub = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active' && Platform.OS === 'android') {
-        AlarmNativeService.canUseFullScreenIntent().then((canUse) => {
-          setHasFullScreenPermission(canUse);
-        });
-      }
-    });
-
     return () => {
       unsubscribeListeners();
       clearInterval(timerInterval);
-      appStateSub.remove();
     };
   }, []);
-
-  const triggerAlarmScreen = async (reminderId: string, data?: any, isLockScreen: boolean = false) => {
-    setIsLockScreenAlarm(isLockScreen);
-    if (data?.testAlarm || reminderId === 'test_alarm_preview') {
-      setActiveAlarmReminder({
-        id: 'test_alarm_preview',
-        title: data?.title || 'Test Full-Screen Alarm',
-        description: data?.description || 'Lock-screen alarm triggered successfully!',
-        scheduledTime: new Date().toISOString(),
-        repeatFrequency: 'none',
-        category: (data?.category as CategoryType) || 'Urgent',
-        isCompleted: false,
-        createdAt: new Date().toISOString(),
-      });
-      return;
-    }
-
-    const currentList = await loadReminders();
-    const found = currentList.find((r) => r.id === reminderId);
-    if (found && !found.isCompleted) {
-      setActiveAlarmReminder(found);
-    }
-  };
-
-  const handleDismissAlarm = async () => {
-    if (!activeAlarmReminder) return;
-    const reminderId = activeAlarmReminder.id;
-    const wasLockScreen = isLockScreenAlarm;
-
-    if (wasLockScreen) {
-      // Exit app immediately so screen cleanly returns to secure lock screen without exposing reminders list
-      BackHandler.exitApp();
-    }
-
-    if (reminderId !== 'test_alarm_preview') {
-      await handleToggle(reminderId);
-    }
-    setActiveAlarmReminder(null);
-    setIsLockScreenAlarm(false);
-  };
-
-  const handleSnoozeAlarm = async () => {
-    if (!activeAlarmReminder) return;
-    const reminderId = activeAlarmReminder.id;
-    const wasLockScreen = isLockScreenAlarm;
-
-    if (wasLockScreen) {
-      BackHandler.exitApp();
-    }
-
-    if (reminderId !== 'test_alarm_preview') {
-      await handleSnooze(reminderId);
-    }
-    setActiveAlarmReminder(null);
-    setIsLockScreenAlarm(false);
-  };
 
   const fetchReminders = async () => {
     try {
@@ -455,32 +362,6 @@ function ReminderMainScreen() {
         </View>
       )}
 
-      {/* Lock screen permission warning banner on Android (especially Google Pixel & Android 14+) */}
-      {!hasFullScreenPermission && Platform.OS === 'android' && (
-        <TouchableOpacity
-          style={styles.permissionBanner}
-          onPress={async () => {
-            await AlarmNativeService.openFullScreenIntentSettings();
-            setTimeout(async () => {
-              const allowed = await AlarmNativeService.canUseFullScreenIntent();
-              setHasFullScreenPermission(allowed);
-            }, 1500);
-          }}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="warning-outline" size={20} color="#F59E0B" />
-          <View style={styles.permissionBannerContent}>
-            <Text style={styles.permissionBannerTitle}>
-              Pixel / Android 14 Full-Screen Permission
-            </Text>
-            <Text style={styles.permissionBannerSubtitle}>
-              Tap here to toggle ON "Allow full-screen notifications" in Settings so alarms wake up your screen!
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#F59E0B" />
-        </TouchableOpacity>
-      )}
-
       {/* App Header & Stat Overview */}
       <Header
         totalPending={metrics.totalPending}
@@ -569,14 +450,6 @@ function ReminderMainScreen() {
         visible={settingsVisible}
         onClose={() => setSettingsVisible(false)}
       />
-
-      {/* Full-Screen Lock-Screen Alarm Modal */}
-      <FullScreenAlarmModal
-        visible={!!activeAlarmReminder}
-        reminder={activeAlarmReminder}
-        onDismiss={handleDismissAlarm}
-        onSnooze={handleSnoozeAlarm}
-      />
     </SafeAreaView>
   );
 }
@@ -610,29 +483,6 @@ const styles = StyleSheet.create({
   expoGoBannerText: {
     fontSize: 12,
     fontWeight: '500',
-  },
-  permissionBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245, 158, 11, 0.3)',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  permissionBannerContent: {
-    flex: 1,
-  },
-  permissionBannerTitle: {
-    color: '#F8FAFC',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  permissionBannerSubtitle: {
-    color: '#CBD5E1',
-    fontSize: 11,
-    marginTop: 2,
   },
   loadingContainer: {
     flex: 1,
