@@ -500,6 +500,22 @@ function withNativeReminderManifest(config) {
       });
     }
 
+    // Ensure EXPO_CHANNEL is set to preview so OTA updates check the correct channel
+    if (!mainApplication['meta-data']) {
+      mainApplication['meta-data'] = [];
+    }
+    const hasChannel = mainApplication['meta-data'].some(
+      (m) => m.$?.['android:name'] === 'expo.modules.updates.EXPO_CHANNEL'
+    );
+    if (!hasChannel) {
+      mainApplication['meta-data'].push({
+        $: {
+          'android:name': 'expo.modules.updates.EXPO_CHANNEL',
+          'android:value': 'preview',
+        },
+      });
+    }
+
     return config;
   });
 }

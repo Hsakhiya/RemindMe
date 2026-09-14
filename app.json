@@ -66,7 +66,8 @@
       ]
     ],
     "updates": {
-      "url": "https://u.expo.dev/7d6d6e88-c074-4a33-928f-d2ef22f0fb0f"
+      "url": "https://u.expo.dev/7d6d6e88-c074-4a33-928f-d2ef22f0fb0f",
+      "channel": "preview"
     },
     "runtimeVersion": "1.2.0",
     "extra": {
