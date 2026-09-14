@@ -55,6 +55,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     try {
       setCheckingUpdate(true);
       setUpdateStatusText('Checking for updates...');
+      try {
+        if (typeof Updates.setUpdateRequestHeadersOverride === 'function') {
+          Updates.setUpdateRequestHeadersOverride({ 'expo-channel-name': 'preview' });
+        }
+      } catch {
+        // ignore if not supported in current environment
+      }
       const check = await Updates.checkForUpdateAsync();
       if (check.isAvailable) {
         setUpdateStatusText('Downloading update...');

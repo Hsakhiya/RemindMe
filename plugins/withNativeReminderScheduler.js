@@ -500,17 +500,37 @@ function withNativeReminderManifest(config) {
       });
     }
 
-    // Ensure EXPO_CHANNEL is set to preview so OTA updates check the correct channel
+    // Ensure UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY has expo-channel-name
     if (!mainApplication['meta-data']) {
       mainApplication['meta-data'] = [];
     }
-    const hasChannel = mainApplication['meta-data'].some(
-      (m) => m.$?.['android:name'] === 'expo.modules.updates.EXPO_CHANNEL'
+    const headersKey = 'expo.modules.updates.UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY';
+    const requestHeadersJson = JSON.stringify({ 'expo-channel-name': 'preview' });
+    const existingHeadersMeta = mainApplication['meta-data'].find(
+      (m) => m.$?.['android:name'] === headersKey
     );
-    if (!hasChannel) {
+    if (existingHeadersMeta) {
+      existingHeadersMeta.$['android:value'] = requestHeadersJson;
+    } else {
       mainApplication['meta-data'].push({
         $: {
-          'android:name': 'expo.modules.updates.EXPO_CHANNEL',
+          'android:name': headersKey,
+          'android:value': requestHeadersJson,
+        },
+      });
+    }
+
+    // Also ensure EXPO_CHANNEL is set to preview
+    const channelKey = 'expo.modules.updates.EXPO_CHANNEL';
+    const existingChannelMeta = mainApplication['meta-data'].find(
+      (m) => m.$?.['android:name'] === channelKey
+    );
+    if (existingChannelMeta) {
+      existingChannelMeta.$['android:value'] = 'preview';
+    } else {
+      mainApplication['meta-data'].push({
+        $: {
+          'android:name': channelKey,
           'android:value': 'preview',
         },
       });

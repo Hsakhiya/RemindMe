@@ -2,7 +2,7 @@
   "expo": {
     "name": "RemindMe",
     "slug": "remind-me-app",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.remindme.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#1E293B",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -67,7 +67,10 @@
     ],
     "updates": {
       "url": "https://u.expo.dev/7d6d6e88-c074-4a33-928f-d2ef22f0fb0f",
-      "channel": "preview"
+      "channel": "preview",
+      "requestHeaders": {
+        "expo-channel-name": "preview"
+      }
     },
     "runtimeVersion": "1.2.0",
     "extra": {

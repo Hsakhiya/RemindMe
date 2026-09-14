@@ -47,20 +47,27 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m" --stacktrace
 
+      - name: Get app version
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RemindMe-v1.2.0-Release-APK
+          name: RemindMe-v${{ env.VERSION }}-Release-APK
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.0
-          name: RemindMe v1.2.0 (Native Background Scheduler & Closed-App Repeats)
+          tag_name: v${{ env.VERSION }}
+          name: RemindMe v${{ env.VERSION }} (OTA Updates & Native Background Scheduler)
           body: |
-            ### RemindMe v1.2.0
+            ### RemindMe v${{ env.VERSION }}
+            - **Over-The-Air (OTA) Updates**: Fixed `UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY` and channel mapping so in-app update checks succeed without errors.
             - **Native Background Alarm Receiver**: Uses dedicated `ReminderAlarmReceiver` to guarantee notification delivery when the app is swiped away from Recent Apps.
             - **Closed-App Repeat & Interval Scheduling**: In-memory JavaScript dependence eliminated. Pure Kotlin native cycle calculation for interval, daily, and weekly reminders even when killed.
             - **Quiet Hours & Cutoff Enforcement**: Honors daily disabled time ranges and stopAt cutoff natively.
