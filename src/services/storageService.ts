@@ -6,6 +6,10 @@ import {
 } from './notificationService';
 import { syncWidgetReminders } from './widgetSyncService';
 import { calculateNextIntervalTime } from '../utils/intervalUtils';
+import {
+  isNativeSchedulerAvailable,
+  getStoredNativeReminders,
+} from './nativeReminderSchedulerService';
 
 const STORAGE_KEY = '@remindme_reminders_v1';
 
@@ -34,6 +38,24 @@ export async function syncAndAdvanceIntervalReminders(): Promise<Reminder[]> {
   const currentList = await readRawReminders();
   const now = Date.now();
   let changed = false;
+
+  // Sync any intervals that advanced in the native receiver while the app was closed
+  if (isNativeSchedulerAvailable()) {
+    try {
+      const nativeReminders = await getStoredNativeReminders();
+      for (const reminder of currentList) {
+        if (!reminder.isCompleted && nativeReminders[reminder.id]) {
+          const nativeData = nativeReminders[reminder.id];
+          if (nativeData.scheduledTime && nativeData.scheduledTime !== reminder.scheduledTime) {
+            reminder.scheduledTime = nativeData.scheduledTime;
+            changed = true;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to sync native reminders:', e);
+    }
+  }
 
   const updatedList: Reminder[] = [];
 

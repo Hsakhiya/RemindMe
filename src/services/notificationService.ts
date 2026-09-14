@@ -1,6 +1,11 @@
 import { Platform } from 'react-native';
 import { isRunningInExpoGo } from 'expo';
 import { Reminder } from '../types/reminder';
+import {
+  isNativeSchedulerAvailable,
+  scheduleNativeReminder,
+  cancelNativeReminder,
+} from './nativeReminderSchedulerService';
 
 export const REMINDER_CHANNEL_ID = 'reminders-channel';
 
@@ -130,6 +135,14 @@ export async function scheduleReminderNotification(reminder: Reminder): Promise<
       await cancelReminderNotification(reminder.notificationId);
     }
 
+    // On native Android build, use dedicated AlarmManager + BroadcastReceiver
+    if (isNativeSchedulerAvailable()) {
+      const success = await scheduleNativeReminder(reminder);
+      if (success) {
+        return reminder.id;
+      }
+    }
+
     let trigger: any;
 
     // If currently paused, delay until pausedUntil time
@@ -201,6 +214,9 @@ export async function scheduleReminderNotification(reminder: Reminder): Promise<
  */
 export async function cancelReminderNotification(notificationId?: string): Promise<void> {
   if (!notificationId || notificationId.startsWith('in_app_')) return;
+  if (isNativeSchedulerAvailable()) {
+    await cancelNativeReminder(notificationId);
+  }
   const notif = getNativeNotifications();
   if (!notif) return;
 

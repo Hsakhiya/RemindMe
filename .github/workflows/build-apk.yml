@@ -50,22 +50,22 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RemindMe-v1.0.3-Release-APK
+          name: RemindMe-v1.2.0-Release-APK
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.3
-          name: RemindMe v1.0.3
+          tag_name: v1.2.0
+          name: RemindMe v1.2.0 (Native Background Scheduler & Closed-App Repeats)
           body: |
-            ### RemindMe v1.0.3
-            - Stable build without full-screen lock alarm modifications.
-            - Scheduled push reminders with sound, banner alerts, and vibration.
-            - Interval recurring reminders and quiet hours.
-            - Android Home Screen Widget support.
-            - Theme customization (accent colors and dark background themes).
+            ### RemindMe v1.2.0
+            - **Native Background Alarm Receiver**: Uses dedicated `ReminderAlarmReceiver` to guarantee notification delivery when the app is swiped away from Recent Apps.
+            - **Closed-App Repeat & Interval Scheduling**: In-memory JavaScript dependence eliminated. Pure Kotlin native cycle calculation for interval, daily, and weekly reminders even when killed.
+            - **Quiet Hours & Cutoff Enforcement**: Honors daily disabled time ranges and stopAt cutoff natively.
+            - **Reboot Resilience**: Automatically re-arms all active reminders upon phone restart (`BootReceiver`).
+            - **Lock Screen Privacy Intact**: Standard notification presentation preserves phone keyguard PIN/Fingerprint security.
           files: android/app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
